@@ -266,6 +266,15 @@ button:hover {
   min-width:250px;
   z-index:4;
 }
+#bp {
+  left:50%;
+  transform:translateX(-50%);
+  top:140px;
+  display:none;
+  text-align:center;
+  min-width:230px;
+  z-index:4;
+}
 #help {
   position:fixed;
   right:10px;
@@ -316,6 +325,7 @@ button:hover {
 </div>
 <div id="pvh" class="p">
 </div>
+<div id="bp" class="p"></div>
 <div id="cb" class="p" style="left:50%;transform:translateX(-50%);bottom:100px;width:220px;display:none;text-align:center">Summoning mount…<div class="bar">
 <i id="cbi" style="background:#e8b84a;width:0">
 </i>
@@ -325,7 +335,7 @@ button:hover {
 <button onclick="toggleMap()" style="position:fixed;right:90px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">🗺️ Map</button>
 <button onclick="toggleBook()" style="position:fixed;right:165px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">🐴 Mounts</button>
 <button onclick="togglePvP()" style="position:fixed;right:255px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">⚔️ PvP</button>
-<div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · M: map · Esc: menu</div>
+<div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · F: nearby hero · M: map · Esc: menu</div>
 <div id="menu">
 <h1>Realm of Ember</h1>
 <p>Choose your hero. Beasts grow deadlier the farther you roam from town.</p>
@@ -537,7 +547,7 @@ const fwd = () => new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
 const dmg = k => Math.round((10 + P.lvl * 3 + P.gear * 2) * k * rnd(.85, 1.15));
 function say(s) { logs.unshift(s); logs.length = Math.min(logs.length, 6); $('log').innerHTML = logs.map((l, i) => `<div style="opacity:${1 - i * .14}">${l}</div>`).join(''); }
 function float(pos, s, c) { const el = document.createElement('div'); el.className = 'ft'; el.style.color = c; el.textContent = s; document.body.appendChild(el); fx.push({ el, p: pos.clone().add(new THREE.Vector3(0, 3, 0)), t: 1.1 }); }
-function hit(m, d) { if (!m || G.cd > 0)
+function hit(m, d) { if (!m || G.cd > 0 || (DU && (DU.cd > 0 || (DU.over && DU.b === m))))
     return; m.hp -= d; m.aggro = true; float(m.pos, d, '#ffd24a'); burst(m.pos, 0xffaa33, 5); if (m.hp <= 0)
     kill(m); }
 function heal(f) { const h = Math.round(P.max * f); P.hp = Math.min(P.max, P.hp + h); float(P.pos, '+' + h, '#6f6'); burst(P.pos, 0x66ff88, 12, 1.5); }
@@ -553,6 +563,10 @@ function spawn() {
     mobs.push({ mesh, pos: mesh.position, hx: x, hz: z, lvl, ty, hp: 30 + lvl * 22, max: 30 + lvl * 22, cd: 0, slow: 0, aggro: false });
 }
 function kill(m) {
+    if (m.wb) {
+        if (DU && DU.b === m) { m.hp = 1; duelEnd(true); return; }
+        return wbKill(m);
+    }
     if (m.bot)
         return botKill(m);
     dying.push({ m: m.mesh, t: 0 });
@@ -992,6 +1006,7 @@ function pvpPlayerDown() { if (P.dead)
     return; P.dead = true; P.rs = 8; P.hp = 0; P.t = null; dismount(); P.cast = null; P.mesh.visible = false; burst(P.pos, 0xcc2222, 16); if (G.mode == 'bg' && !G.over)
     G.sc[1] += 5; bn(G.mode == 'bg' ? 'You died — respawning in 8s' : 'You were eliminated!', 2500); }
 function startMatch(mode) {
+    cancelDuel(true);
     if (G.on)
         return say('Leave your current match first.');
     if (!running)
@@ -1108,8 +1123,394 @@ function pvpTick(dt, t) {
 function togglePvP() { if (!running)
     return; const p = $('pv'); p.style.display = p.style.display == 'flex' ? 'none' : 'flex'; renderPvP(); }
 function renderPvP() { const D = [['Easy', .6], ['Normal', 1], ['Hard', 1.4]]; $('pv').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><b style="color:var(--gold)">⚔️ PvP — Fight the Bots</b><span onclick="togglePvP()" style="float:right;cursor:pointer">✕</span><div style="margin:8px 0;font-size:12px;opacity:.8">AI champions of every class. Win for XP and gold. O or Esc to close.</div><div style="margin-bottom:10px">Difficulty: ${D.map(([n, v]) => `<button onclick="G.diff=${v};renderPvP()" style="padding:4px 12px;font-size:13px;${G.diff == v ? 'border-color:#fff;background:#5a4318' : ''}">${n}</button>`).join('')}</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${[['duel', '🤺', 'Duel', '1 vs 1 · last one standing'], ['arena', '🏟️', 'Arena', '3 vs 3 · wipe the other team'], ['bg', '🚩', 'Battleground', '5 vs 5 · hold 3 flags, first to 300']].map(([k, e, n, d]) => `<div class="sl" onclick="startMatch('${k}')" style="cursor:pointer;width:150px;height:140px;background:radial-gradient(circle at 50% 35%,#7a3a1a,#050505 85%)"><i class="ic" style="font-size:46px;top:10px">${e}</i><span style="font-size:13px;bottom:48px;background:none">${n}</span><em style="bottom:6px;color:#fff;font-size:11px;white-space:normal;padding:0 4px">${d}</em></div>`).join('')}</div></div>`; }
+// ===== World adventurer bots (roam the starting zone, level up, duelable in town) =====
+let wbots = [], DU = null, duelRingM = null, selB = null;
+const WB_NAMES = ['Aldric', 'Brynn', 'Kael', 'Mira', 'Thorin', 'Lyra', 'Doran', 'Selene', 'Varek', 'Isolde', 'Fenn', 'Orla', 'Gareth', 'Nyx', 'Rurik', 'Tamsin'];
+const WB_K = { warrior: 1.3, rogue: 1.7, paladin: 1.4, mage: 1.8, warlock: 1.7, hunter: 1.5, priest: 1.2 };
+const WB_HOME = [[-7, -3], [6, 0], [0, 11]];
+function wbLabelDraw(b) {
+    const g = b.lc.getContext('2d'), pct = Math.max(0, b.hp / b.max);
+    g.clearRect(0, 0, 256, 64);
+    g.font = 'bold 24px Georgia';
+    g.textAlign = 'center';
+    g.lineWidth = 5;
+    g.strokeStyle = '#000';
+    const s = b.name + '  Lv ' + b.lvl + (b.role == 'town' ? '  ⚔' : '');
+    g.strokeText(s, 128, 26);
+    g.fillStyle = b.role == 'town' ? '#ffe48a' : '#9fd8ff';
+    g.fillText(s, 128, 26);
+    g.fillStyle = 'rgba(0,0,0,.75)';
+    g.fillRect(48, 36, 160, 12);
+    g.fillStyle = pct > .5 ? '#3c3' : pct > .25 ? '#ec3' : '#e33';
+    g.fillRect(49, 37, 158 * pct, 10);
+    b.lt.needsUpdate = true;
+    b.lk = b.lvl + ':' + Math.round(pct * 20);
+}
+function mkWB(cls, role, x, z, name, lvl) {
+    const k = CL[cls], mesh = hero(k.col, cls);
+    mesh.position.set(x, 0, z);
+    S.add(mesh);
+    mesh.traverse(o => { if (o.isMesh && o.material.isMeshLambertMaterial)
+        o.castShadow = true; });
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 64;
+    const lt = new THREE.CanvasTexture(c), sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: lt, transparent: true }));
+    sp.scale.set(4.4, 1.1, 1);
+    S.add(sp);
+    const mx = k.hp + 20 * (lvl - 1);
+    const b = { wb: 1, name, cls, role, mesh, pos: mesh.position, lvl, xp: 0, hp: mx, max: mx, cd: rnd(0, 1), sw: 0, slow: 0, mv: 0, aggro: false, dead: false, rs: 0, rng: ['mage', 'hunter', 'warlock', 'priest'].includes(cls), k: WB_K[cls], lc: c, lt, label: sp, tgt: null, wp: null, home: { x, z }, idle: rnd(1, 4), tr: 0, id: wbots.length, hc: 0, lk: '' };
+    wbLabelDraw(b);
+    wbots.push(b);
+    return b;
+}
+function wbInit() {
+    wbClear();
+    const cls = shf(Object.keys(CL)), nm = shf(WB_NAMES);
+    WB_HOME.forEach(([x, z], i) => { const b = mkWB(cls[i], 'town', x, z, nm[i], 1 + (i % 2)); b.mesh.rotation.y = Math.atan2(-x, -z); });
+    for (let i = 0; i < 5; i++) {
+        const a = rnd(0, 6.28), d = TOWN + rnd(4, 20);
+        mkWB(cls[(i + 3) % 7], 'hunter', Math.cos(a) * d, Math.sin(a) * d, nm[3 + i], 1);
+    }
+}
+function wbClear() {
+    cancelDuel(true);
+    wbots.forEach(b => { S.remove(b.mesh); S.remove(b.label); const i = mobs.indexOf(b); if (i >= 0)
+        mobs.splice(i, 1); });
+    wbots = [];
+    selB = null;
+    if ($('bp'))
+        $('bp').style.display = 'none';
+}
+function wbXP(b, x) {
+    b.xp += x;
+    while (b.xp >= Math.round(30 * Math.pow(b.lvl, 1.5))) {
+        b.xp -= Math.round(30 * Math.pow(b.lvl, 1.5));
+        b.lvl++;
+        b.max = CL[b.cls].hp + 20 * (b.lvl - 1);
+        b.hp = b.max;
+        burst(b.pos, 0xffee55, 24, 2);
+        float(b.pos, '⬆ Lv ' + b.lvl, '#ffe066');
+        if (d3(b, P) < 60)
+            say('<span style="color:#9fd8ff">' + b.name + ' reached level ' + b.lvl + '!</span>');
+    }
+}
+function wbHurt(b, d) { if (b.dead)
+    return; b.hp -= d; float(b.pos, '-' + d, '#f99'); if (b.hp <= 0)
+    wbKill(b); }
+function wbKill(b) {
+    if (b.dead)
+        return;
+    b.dead = true;
+    b.rs = 12;
+    b.tgt = null;
+    dying.push({ m: b.mesh, t: 0 });
+    b.label.visible = false;
+    burst(b.pos, 0xcc2222, 12);
+    const i = mobs.indexOf(b);
+    if (i >= 0)
+        mobs.splice(i, 1);
+    if (P.t === b)
+        P.t = null;
+    if (selB === b)
+        closeBP();
+    if (d3(b, P) < 60)
+        say(b.name + ' fell in battle...');
+}
+function wbRespawn(b) {
+    const a = rnd(0, 6.28), home = b.role == 'town';
+    b.hp = b.max;
+    b.dead = false;
+    b.pos.set(home ? b.home.x : Math.cos(a) * (TOWN - 3), 0, home ? b.home.z : Math.sin(a) * (TOWN - 3));
+    b.mesh.scale.setScalar(1);
+    b.mesh.rotation.set(0, 0, 0);
+    S.add(b.mesh);
+    b.label.visible = true;
+    b.tgt = null;
+}
+function wbHitMob(m, d, b) {
+    if (mobs.indexOf(m) < 0 || m.bot || m.wb)
+        return;
+    m.hp -= d;
+    m.bt = b;
+    float(m.pos, d, '#9fd8ff');
+    burst(m.pos, 0xffaa33, 3);
+    if (m.hp <= 0) {
+        dying.push({ m: m.mesh, t: 0 });
+        m.mesh.bar.forEach(x => x.visible = false);
+        burst(m.pos, 0xcc2222, 10);
+        mobs.splice(mobs.indexOf(m), 1);
+        if (P.t === m)
+            P.t = null;
+        if (b) {
+            b.tgt = null;
+            wbXP(b, 10 + m.lvl * 8);
+        }
+        setTimeout(spawn, 6000);
+    }
+}
+function wbSwing(b, tg, dm, byMob) {
+    b.sw = .3;
+    b.cd = b.rng ? 1.5 : 1;
+    if (b.rng) {
+        const col = { mage: 0xff7711, warlock: 0x9933ff, hunter: 0xddddaa, priest: 0xffee99 }[b.cls], o = new THREE.Mesh(new THREE.SphereGeometry(b.cls == 'hunter' ? .18 : .33, 8, 8), new THREE.MeshBasicMaterial({ color: col }));
+        o.position.copy(b.pos);
+        o.position.y += 2;
+        S.add(o);
+        bolts.push({ b: o, m: tg, d: dm, c: col, wbBy: byMob ? b : null });
+    }
+    else if (byMob)
+        wbHitMob(tg, dm, b);
+    else
+        foeHit(tg, dm);
+}
+function wbAI(b, dt, t) {
+    b.slow = Math.max(0, b.slow - dt);
+    b.cd -= dt;
+    b.hc -= dt;
+    b.mv = 0;
+    b.sw = Math.max(0, b.sw - dt);
+    const go = (x, z, s) => { const dx = x - b.pos.x, dz = z - b.pos.z, l = Math.hypot(dx, dz) || 1; if (l < .3)
+        return; b.pos.x += dx / l * s * dt; b.pos.z += dz / l * s * dt; b.mesh.rotation.y = Math.atan2(dx, dz); b.mv = 1; };
+    const face = o => { b.mesh.rotation.y = Math.atan2(o.pos.x - b.pos.x, o.pos.z - b.pos.z); };
+    const sp = (5 + b.lvl * .2) * (b.slow > 0 ? .45 : 1), inTown = Math.hypot(b.pos.x, b.pos.z) < TOWN;
+    // --- duel with the player ---
+    if (DU && DU.b === b) {
+        if (DU.cd > 0 || DU.over) {
+            face(P);
+            return;
+        }
+        const bd = d3(b, P), R = b.rng ? 15 : 3;
+        if (bd > R)
+            go(P.pos.x, P.pos.z, sp);
+        else {
+            if (b.rng && bd < 6)
+                go(2 * b.pos.x - P.pos.x, 2 * b.pos.z - P.pos.z, sp * .8);
+            else
+                face(P);
+            if (b.cd <= 0) {
+                if (b.cls == 'priest' && b.hp < b.max * .45 && b.hc <= 0) {
+                    b.hp = Math.min(b.max, b.hp + Math.round(b.max * .25));
+                    b.hc = 8;
+                    b.cd = 2;
+                    float(b.pos, '+heal', '#6f6');
+                    burst(b.pos, 0x66ff88, 8, 1.2);
+                }
+                else
+                    wbSwing(b, P, Math.round((10 + b.lvl * 3 + P.gear * 1.2) * b.k * rnd(.85, 1.15) * G.diff), false);
+            }
+        }
+        return;
+    }
+    b.hp = Math.min(b.max, b.hp + b.max * (inTown ? .1 : .01) * dt);
+    // --- townsfolk: stand around, train, wait for a duel ---
+    if (b.role == 'town') {
+        b.tr += dt;
+        if (b.tr > 14) {
+            b.tr = 0;
+            wbXP(b, 4 + b.lvl * 2);
+        }
+        b.idle -= dt;
+        if (b.wp) {
+            go(b.wp.x, b.wp.z, 2.2);
+            if (Math.hypot(b.wp.x - b.pos.x, b.wp.z - b.pos.z) < .5)
+                b.wp = null;
+        }
+        else if (b.idle <= 0) {
+            b.idle = rnd(5, 11);
+            b.wp = { x: b.home.x + rnd(-3, 3), z: b.home.z + rnd(-3, 3) };
+        }
+        else if (d3(P, b) < 8)
+            face(P);
+        return;
+    }
+    // --- adventurers: hunt monsters in the starting zone and level up ---
+    if (b.hp < b.max * .35 && !inTown) {
+        b.tgt = null;
+        go(0, 0, sp * 1.1);
+        return;
+    }
+    if (inTown && b.hp < b.max * .9)
+        return;
+    if (b.tgt && mobs.indexOf(b.tgt) < 0)
+        b.tgt = null;
+    if (!b.tgt) {
+        let best = null, bdm = 45;
+        mobs.forEach(m => { if (m.bot || m.wb)
+            return; const d = d3(m, b); if (d < bdm && m.lvl <= b.lvl + 1) {
+            bdm = d;
+            best = m;
+        } });
+        b.tgt = best;
+    }
+    if (b.tgt) {
+        const m = b.tgt, bd = d3(m, b), R = b.rng ? 14 : 2.8;
+        if (b.rng && bd < 5)
+            go(2 * b.pos.x - m.pos.x, 2 * b.pos.z - m.pos.z, sp * .7);
+        else if (bd > R)
+            go(m.pos.x, m.pos.z, sp);
+        else {
+            face(m);
+            if (b.cd <= 0)
+                wbSwing(b, m, Math.round((10 + b.lvl * 3) * b.k * rnd(.85, 1.15)), true);
+        }
+    }
+    else {
+        if (!b.wp || Math.hypot(b.wp.x - b.pos.x, b.wp.z - b.pos.z) < 2) {
+            const R = Math.min(WORLD - 12, (b.lvl + 1) * 24), a = rnd(0, 6.28), d = rnd(TOWN + 6, Math.max(TOWN + 12, R));
+            b.wp = { x: Math.cos(a) * d, z: Math.sin(a) * d };
+        }
+        go(b.wp.x, b.wp.z, sp * .8);
+    }
+}
+function wbTick(dt, t) {
+    if (!wbots.length)
+        return;
+    wbots.forEach(b => {
+        if (b.dead) {
+            b.rs -= dt;
+            if (b.rs <= 0)
+                wbRespawn(b);
+            return;
+        }
+        wbAI(b, dt, t);
+        b.pos.x = Math.max(-WORLD + 3, Math.min(WORLD - 3, b.pos.x));
+        b.pos.z = Math.max(-WORLD + 3, Math.min(WORLD - 3, b.pos.z));
+        const sw = b.mv ? Math.sin(t * 12 + b.id) * .8 : 0;
+        b.mesh.legs[0].rotation.x = sw;
+        b.mesh.legs[1].rotation.x = -sw;
+        b.mesh.arm.rotation.x = -sw * .8;
+        b.mesh.w.rotation.x = b.sw > 0 ? -Math.sin(b.sw / .3 * 3.14) * 1.8 : 0;
+        b.label.position.set(b.pos.x, 3.7, b.pos.z);
+        b.label.visible = d3(b, P) < 70;
+        if (b.lk !== b.lvl + ':' + Math.round(Math.max(0, b.hp / b.max) * 20))
+            wbLabelDraw(b);
+    });
+    if (DU && !DU.over) {
+        if (G.on || P.dead || DU.b.dead || d3(DU.b, P) > 40)
+            cancelDuel();
+        else if (DU.cd > 0) {
+            DU.cd -= dt;
+            if (DU.cd <= 0) {
+                DU.cd = 0;
+                bn('⚔️ FIGHT!', 1000);
+            }
+            else
+                bn(String(Math.ceil(DU.cd)), 0);
+        }
+    }
+    if (selB) {
+        if (selB.dead || d3(selB, P) > 30)
+            closeBP();
+        else
+            renderBP();
+    }
+}
+// ----- Duel -----
+function startDuel(b) {
+    if (!b || DU || G.on || P.dead)
+        return;
+    if (Math.hypot(P.pos.x, P.pos.z) > TOWN + 6 || Math.hypot(b.pos.x, b.pos.z) > TOWN + 6)
+        return say('Duels are fought in town.');
+    if (b.dead || b.tgt)
+        return say(b.name + ' is busy.');
+    dismount();
+    P.cast = null;
+    closeBP();
+    P.hp = P.max;
+    P.mp = P.mmax;
+    P.cds = [0, 0, 0, 0];
+    P.shield = 0;
+    b.hp = b.max;
+    b.hc = 0;
+    b.wp = null;
+    DU = { b, cd: 3, over: false };
+    b.aggro = false;
+    mobs.push(b);
+    P.t = b;
+    duelRingM = new THREE.Mesh(new THREE.RingGeometry(13, 14, 48), new THREE.MeshBasicMaterial({ color: 0xffcc44, side: 2, transparent: true, opacity: .7 }));
+    duelRingM.rotation.x = -Math.PI / 2;
+    duelRingM.position.set((P.pos.x + b.pos.x) / 2, .3, (P.pos.z + b.pos.z) / 2);
+    S.add(duelRingM);
+    say('Duel with ' + b.name + ' (Lv ' + b.lvl + ') — first to fall loses!');
+    bn('3', 0);
+}
+function cancelDuel(silent) {
+    if (!DU)
+        return;
+    const b = DU.b;
+    if (duelRingM) {
+        S.remove(duelRingM);
+        duelRingM = null;
+    }
+    const i = mobs.indexOf(b);
+    if (i >= 0)
+        mobs.splice(i, 1);
+    b.aggro = false;
+    b.dot = null;
+    b.slow = 0;
+    b.hp = b.max;
+    if (P.t === b)
+        P.t = null;
+    DU = null;
+    if (!silent)
+        bn('Duel cancelled', 1500);
+}
+function duelEnd(win) {
+    if (!DU || DU.over)
+        return;
+    DU.over = true;
+    const b = DU.b;
+    if (win) {
+        const xp = 15 * b.lvl + 10, g = 5 * b.lvl + 5;
+        addXP(xp);
+        P.gold += g;
+        wbXP(b, 5 * P.lvl);
+        bn('🏆 You won the duel!', 3000);
+        say('You defeated ' + b.name + '! +' + xp + ' xp, +' + g + ' gold');
+    }
+    else {
+        wbXP(b, 15 * P.lvl + 10);
+        bn('💀 You lost the duel', 3000);
+        say(b.name + ' wins the duel.');
+    }
+    setTimeout(() => { if (DU && DU.b === b) {
+        P.hp = Math.max(P.hp, Math.round(P.max * .5));
+        cancelDuel(true);
+    } }, 2500);
+}
+// ----- Hero panel -----
+function selBot(b) { selB = b; $('bp').dataset.s = ''; renderBP(); $('bp').style.display = 'block'; if (mobs.indexOf(b) >= 0)
+    P.t = b; }
+function closeBP() { selB = null; $('bp').style.display = 'none'; }
+function nearBot() {
+    let best = null, bd = 16;
+    wbots.forEach(b => { const d = d3(b, P); if (!b.dead && d < bd) {
+        bd = d;
+        best = b;
+    } });
+    if (best)
+        selBot(best);
+    else
+        say('No hero nearby.');
+}
+function renderBP() {
+    const b = selB, p = $('bp');
+    if (!b)
+        return;
+    const inT = Math.hypot(P.pos.x, P.pos.z) <= TOWN + 6 && Math.hypot(b.pos.x, b.pos.z) <= TOWN + 6, can = !DU && !G.on && !b.tgt && !b.dead;
+    const st = DU && DU.b === b ? 'Dueling you' : b.tgt ? 'Fighting monsters' : b.role == 'town' ? 'Resting in town' : 'Adventuring';
+    const hint = DU ? '' : !inT ? 'Duels are fought in town' : !can ? 'Busy right now' : '';
+    const s = `<b style="color:var(--gold)">${b.name}</b> · Lv ${b.lvl} ${b.cls[0].toUpperCase() + b.cls.slice(1)}<br><small>${st}</small><div class="bar"><i style="background:#c33;width:${Math.round(Math.max(0, b.hp / b.max) * 20) * 5}%"></i></div><div style="margin-top:6px">` + (can && inT ? `<button onclick="startDuel(selB)" style="padding:4px 12px;font-size:13px;margin:0 4px">⚔️ Duel</button>` : `<small style="opacity:.8">${hint}</small>`) + `<button onclick="closeBP()" style="padding:4px 10px;font-size:13px;margin:0 4px">✕</button></div>`;
+    if (p.dataset.s !== s) {
+        p.dataset.s = s;
+        p.innerHTML = s;
+    }
+}
+
 function MOUNTANIM(dt, t) {
     pvpTick(dt, t);
+    wbTick(dt, t);
     if (P.cast) {
         if (P.mv) {
             P.cast = null;
@@ -1165,11 +1566,12 @@ function togglePause() { if (!running)
     return; if (mapOpen)
     return toggleMap(); if ($('mb').style.display == 'flex')
     return toggleBook(); if ($('pv').style.display == 'flex')
-    return togglePvP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
+    return togglePvP(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
 function toggleMap() { if (!running)
     return; mapOpen = !mapOpen; $('map').style.display = mapOpen ? 'flex' : 'none'; if (mapOpen)
     drawMap(); }
 function toMenu() {
+    wbClear();
     if (G.on)
         leaveMatch(1);
     running = false;
@@ -1222,6 +1624,7 @@ function drawMap() {
     g.fillStyle = '#fff';
     g.font = '11px Georgia';
     g.fillText('Town', X(0) - 14, Z(0) + TOWN * K + 12);
+    wbots.forEach(b => { if (b.dead) return; g.fillStyle = b.role == 'town' ? '#ffe48a' : '#4fc3ff'; g.beginPath(); g.arc(X(b.pos.x), Z(b.pos.z), 3.5, 0, 6.3); g.fill(); g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); });
     mobs.forEach(m => { g.fillStyle = 'hsl(' + Math.max(0, 120 - m.lvl * 18) + ',80%,50%)'; g.fillRect(X(m.pos.x) - 2, Z(m.pos.z) - 2, 4, 4); });
     g.save();
     g.translate(X(P.pos.x), Z(P.pos.z));
@@ -1310,6 +1713,7 @@ function start(c) {
     P.pos.set(0, 0, -3);
     for (let i = 0; i < 70; i++)
         spawn();
+    wbInit();
     Q = { need: 5, have: 0, on: false, done: 0 };
     $('hb').innerHTML = k.ab.map((a, i) => { const ic = ICONS[a.n] || ['❓', '#444']; return `<div class="sl" title="${a.n}" style="background:radial-gradient(circle at 50% 35%,${ic[1]},#050505 85%)"><b>${i + 1}</b><i class="ic">${ic[0]}</i><span>${a.n}</span><em>${a.cost} mp</em><u></u></div>`; }).join('');
     say('Welcome, hero! Speak to the Elder (the golden gem) in town.');
@@ -1372,6 +1776,9 @@ addEventListener('keydown', e => { const n = KN[e.code]; if (n) {
 } if (e.code == 'KeyB' || e.code == 'KeyP') {
     toggleBook();
     return;
+} if (e.code == 'KeyF') {
+    nearBot();
+    return;
 } if (e.code == 'KeyO') {
     togglePvP();
     return;
@@ -1409,12 +1816,15 @@ el.onclick = e => {
         return;
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), cam);
-    const hits = ray.intersectObjects([npc, ...mobs.map(m => m.mesh)], true);
+    const hits = ray.intersectObjects([npc, ...mobs.map(m => m.mesh), ...wbots.filter(b => !b.dead).map(b => b.mesh)], true);
     if (!hits.length)
         return;
     let o = hits[0].object;
     while (o.parent && o.parent !== S)
         o = o.parent;
+    const wbx = wbots.find(b => b.mesh === o);
+    if (wbx)
+        return selBot(wbx);
     if (o === npc) {
         if (d3(npc, P) > 9)
             return say('Move closer to the Elder.');
@@ -1492,6 +1902,8 @@ function update(dt, t) {
     mark.visible = true;
     mark.material.color.set(Q.on ? 0x66ccff : 0xffdd33);
     mobs.forEach(m => {
+        if (m.wb)
+            return;
         if (m.bot) {
             botAI(m, dt, t);
             return;
@@ -1505,7 +1917,22 @@ function update(dt, t) {
         m.mesh.bar.forEach(b => { b.visible = show; b.quaternion.copy(cam.quaternion); });
         m.mesh.bar[1].scale.x = Math.max(.001, m.hp / m.max);
         const go = (tx, tz, sp) => { m.mv = 1; const dx = tx - m.pos.x, dz = tz - m.pos.z, l = Math.hypot(dx, dz) || 1; m.pos.x += dx / l * sp * dt; m.pos.z += dz / l * sp * dt; m.mesh.rotation.y = Math.atan2(dx, dz); };
-        if (!town && ((d < 17 && !(P.mount && P.mount.fly)) || m.aggro) && d < 55) {
+        if (m.bt && (m.bt.dead || d3(m, m.bt) > 40))
+            m.bt = null;
+        if (m.bt && !(m.aggro && d < 25)) {
+            const bd = d3(m, m.bt);
+            if (bd > 2.6)
+                go(m.bt.pos.x, m.bt.pos.z, (5 + m.lvl * .35) * (m.slow > 0 ? .4 : 1));
+            else {
+                m.mesh.rotation.y = Math.atan2(m.bt.pos.x - m.pos.x, m.bt.pos.z - m.pos.z);
+                if (m.cd <= 0) {
+                    m.cd = 1.1;
+                    m.lunge = .25;
+                    wbHurt(m.bt, Math.max(1, Math.round(2 + m.lvl * 2.2 - m.bt.lvl * .4)));
+                }
+            }
+        }
+        else if (!town && ((d < 17 && !(P.mount && P.mount.fly)) || m.aggro) && d < 55) {
             if (d > 2.6)
                 go(P.pos.x, P.pos.z, (5 + m.lvl * .35) * (m.slow > 0 ? .4 : 1));
             else {
@@ -1554,7 +1981,9 @@ function update(dt, t) {
         }
         const tp = b.m.pos.clone().setY(1.2), dv = tp.clone().sub(b.b.position), l = dv.length();
         if (l < 1) {
-            if (b.m === P || b.m.ally)
+            if (b.wbBy)
+                wbHitMob(b.m, b.d, b.wbBy);
+            else if (b.m === P || b.m.ally)
                 foeHit(b.m, b.d);
             else
                 hit(b.m, b.d);
@@ -1567,6 +1996,10 @@ function update(dt, t) {
         burst(b.b.position, b.c || 0xff6600, 1, .1, 0);
         return true;
     });
+    if (DU && P.hp <= 0) {
+        P.hp = 1;
+        duelEnd(false);
+    }
     if (P.hp <= 0 && G.on)
         pvpPlayerDown();
     else if (P.hp <= 0) {
@@ -1621,6 +2054,9 @@ function hud() {
     c.fillStyle = '#f44';
     mobs.forEach(m => { const x = X(m.pos.x), z = Z(m.pos.z); if (x > 0 && x < 120 && z > 0 && z < 120)
         c.fillRect(x - 1.5, z - 1.5, 3, 3); });
+    c.fillStyle = '#4fc3ff';
+    wbots.forEach(b => { if (b.dead) return; const x = X(b.pos.x), z = Z(b.pos.z); if (x > 0 && x < 120 && z > 0 && z < 120)
+        c.fillRect(x - 2, z - 2, 4, 4); });
     c.fillStyle = '#fff';
     c.beginPath();
     c.arc(60, 60, 3.5, 0, 6.3);
