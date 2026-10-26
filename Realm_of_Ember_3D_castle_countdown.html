@@ -244,6 +244,26 @@ button:hover {
   padding:0;
   font-size:14px;
 }
+#adm {
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:8;
+  background:#0b0804b0;
+  border:0;
+  border-radius:0;
+  padding:0;
+  font-size:14px;
+}
+#abf {
+  left:10px;
+  top:104px;
+  display:none;
+  padding:2px 8px;
+  font-size:14px;
+  z-index:3;
+}
 #bn {
   position:fixed;
   left:50%;
@@ -275,10 +295,62 @@ button:hover {
   min-width:230px;
   z-index:4;
 }
+#abtns {
+  position:fixed;
+  right:10px;
+  bottom:calc(12px + env(safe-area-inset-bottom,0px));
+  display:grid;
+  grid-template-columns:repeat(2,60px);
+  gap:8px;
+  z-index:3;
+}
+#abtns button {
+  width:60px;
+  height:60px;
+  overflow:hidden;
+  padding:0;
+  margin:0;
+  border-radius:6px;
+  border:2px solid var(--gold);
+  background:radial-gradient(circle at 50% 35%,#4a3416,#050505 85%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  font-size:11px;
+  line-height:1.1;
+  color:var(--fg);
+}
+#abtns button i {
+  font-style:normal;
+  font-size:22px;
+  line-height:24px;
+  height:24px;
+}
+#abtns button:hover {
+  border-color:#fff;
+}
+#admbtn {
+  position:fixed;
+  right:142px;
+  top:112px;
+  width:34px;
+  height:34px;
+  padding:0;
+  margin:0;
+  font-size:17px;
+  font-weight:bold;
+  z-index:3;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#4a9cff,#0b2a66);
+  border:2px solid #e8b84a;
+  color:#fff;
+}
 #help {
   position:fixed;
   right:10px;
-  bottom:10px;
+  bottom:150px;
   font-size:11px;
   opacity:.7;
   text-align:right;
@@ -303,7 +375,7 @@ button:hover {
 <button onclick="togglePause()">▶ Resume</button>
 <button onclick="toggleMap()">🗺️ Map (M)</button>
 <button onclick="togglePause();toggleBook()">🐴 Mounts (P)</button>
-<button onclick="togglePause();togglePvP()">⚔️ PvP (O)</button>
+<button onclick="togglePause();togglePvP()">⚔️ PvP (O)</button><button onclick="togglePause();toggleAdm()">R Admin (R)</button>
 <button onclick="toMenu()">🏠 Main Menu / Change Class</button>
 </div>
 <small>Progress is not saved when you return to the menu.</small>
@@ -326,15 +398,20 @@ button:hover {
 <div id="pvh" class="p">
 </div>
 <div id="bp" class="p"></div>
+<div id="adm" class="p"></div>
+<div id="abf" class="p"></div>
 <div id="cb" class="p" style="left:50%;transform:translateX(-50%);bottom:100px;width:220px;display:none;text-align:center">Summoning mount…<div class="bar">
 <i id="cbi" style="background:#e8b84a;width:0">
 </i>
 </div>
 </div>
-<button onclick="togglePause()" style="position:fixed;right:10px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">☰ Menu</button>
-<button onclick="toggleMap()" style="position:fixed;right:90px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">🗺️ Map</button>
-<button onclick="toggleBook()" style="position:fixed;right:165px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">🐴 Mounts</button>
-<button onclick="togglePvP()" style="position:fixed;right:255px;top:240px;padding:4px 10px;font-size:13px;margin:0;z-index:3">⚔️ PvP</button>
+<div id="abtns">
+<button onclick="togglePause()" title="Menu (Esc)"><i>☰</i><span>Menu</span></button>
+<button onclick="toggleMap()" title="Map (M)"><i>🗺️</i><span>Map</span></button>
+<button onclick="toggleBook()" title="Mounts (P)"><i>🐴</i><span>Mounts</span></button>
+<button onclick="togglePvP()" title="PvP (O)"><i>⚔️</i><span>PvP</span></button>
+</div>
+<button id="admbtn" onclick="toggleAdm()" title="Admin panel (R)">R</button>
 <div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · F: nearby hero · M: map · Esc: menu</div>
 <div id="menu">
 <h1>Realm of Ember</h1>
@@ -375,7 +452,8 @@ const S = new THREE.Scene(), SKY = 0x87b8e8;
 S.background = new THREE.Color(SKY);
 S.fog = new THREE.Fog(SKY, 40, 170);
 const cam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, .1, 400);
-S.add(new THREE.HemisphereLight(0xffffff, 0x3a5a2a, .95));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x3a5a2a, .95);
+S.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0cc, .8);
 sun.position.set(50, 80, 30);
 sun.castShadow = true;
@@ -386,7 +464,7 @@ R.shadowMap.enabled = true;
 R.shadowMap.type = THREE.PCFSoftShadowMap;
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 const M = (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {}));
-const WORLD = 150, TOWN = 17, add = (m, x, y, z, p) => { m.position.set(x, y, z); (p || S).add(m); return m; };
+const WORLD = 450, TOWN = 17, add = (m, x, y, z, p) => { m.position.set(x, y, z); (p || S).add(m); return m; };
 const sway = [], clouds = [];
 function tex(fn, rep) { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); fn(g, 256); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 4; return t; }
 function speck(g, w, base, cols, n, l) { g.fillStyle = base; g.fillRect(0, 0, w, w); for (let i = 0; i < n; i++) {
@@ -419,46 +497,334 @@ const rockT = tex((g, w) => speck(g, w, '#777777', ['#666666', '#888888', '#9999
 const fur = tex((g, w) => speck(g, w, '#dddddd', ['#bbbbbb', '#ffffff', '#999999'], 2200, 6), 1);
 const TM = t => new THREE.MeshLambertMaterial({ map: t }), barkM = TM(barkT), leafM = TM(leafT);
 // ground & town
-const ground = add(new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 2.4, WORLD * 2.4), TM(grassT)), 0, 0, 0);
+// ===== World zones =====
+const R0 = 95, PI = Math.PI;
+const ZONES = [
+    { n: 'Emberwood Meadow', e: '🌿', c: '#8be07a', lv: '1-3', col: 0x4b9a44, sky: 0x87b8e8, fn: 40, ff: 170, hi: .95, si: .8, mm: '#2d5a2b' },
+    { n: 'Frostpeak Tundra', e: '❄️', c: '#bfe6ff', lv: '4-15', col: 0xe6f0f8, sky: 0xcfe0ee, fn: 22, ff: 115, hi: 1.05, si: .6, mm: '#c9d8e4' },
+    { n: 'Ashen Dunes', e: '🏜️', c: '#ffd27a', lv: '4-15', col: 0xdcb86e, sky: 0xf2d9a2, fn: 60, ff: 240, hi: 1.1, si: 1.05, mm: '#c9a55c' },
+    { n: 'Amberfall Forest', e: '🍂', c: '#ffa94d', lv: '4-15', col: 0xb8742e, sky: 0xe6b27a, fn: 30, ff: 150, hi: .9, si: .7, mm: '#8a5522' },
+    { n: 'Stormveil Fen', e: '🌧️', c: '#9fc4e8', lv: '4-15', col: 0x3f6a58, sky: 0x66727e, fn: 16, ff: 100, hi: .7, si: .3, mm: '#2c4a40' }
+];
+function zoneAt(x, z) {
+    const d = Math.hypot(x, z);
+    if (d < R0)
+        return 0;
+    const a = Math.atan2(z, x);
+    if (a >= -PI / 4 && a < PI / 4)
+        return 2;
+    if (a >= PI / 4 && a < 3 * PI / 4)
+        return 3;
+    if (a >= -3 * PI / 4 && a < -PI / 4)
+        return 1;
+    return 4;
+}
+const ZSAMP = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [.7, .7], [-.7, .7], [.7, -.7], [-.7, -.7]];
+function zoneW(x, z, r) {
+    const w = [0, 0, 0, 0, 0];
+    ZSAMP.forEach(([a, b]) => { w[zoneAt(x + a * r, z + b * r)] += 1 / 9; });
+    return w;
+}
+const detailT = tex((g, w) => speck(g, w, '#d2d2d2', ['#ececec', '#b4b4b4', '#f6f6f6', '#9c9c9c'], 2600, 9), 200);
+const gGeo = new THREE.PlaneGeometry(WORLD * 2.2, WORLD * 2.2, 220, 220), gp = gGeo.attributes.position, gcol = new Float32Array(gp.count * 3);
+for (let i = 0; i < gp.count; i++) {
+    const x = gp.getX(i), z = -gp.getY(i), w = zoneW(x, z, 10);
+    let r = 0, g = 0, b = 0;
+    w.forEach((v, k) => { if (v) {
+        const c = ZONES[k].col;
+        r += ((c >> 16) & 255) / 255 * v;
+        g += ((c >> 8) & 255) / 255 * v;
+        b += (c & 255) / 255 * v;
+    } });
+    const n = .92 + Math.random() * .16;
+    gcol[i * 3] = r * n;
+    gcol[i * 3 + 1] = g * n;
+    gcol[i * 3 + 2] = b * n;
+}
+gGeo.setAttribute('color', new THREE.BufferAttribute(gcol, 3));
+const ground = add(new THREE.Mesh(gGeo, new THREE.MeshLambertMaterial({ map: detailT, vertexColors: true })), 0, 0, 0);
+
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 add(new THREE.Mesh(new THREE.CylinderGeometry(TOWN, TOWN, .2, 40), TM(stoneT)), 0, .1, 0).receiveShadow = true;
 [[-10, -9], [10, -9], [-11, 8], [11, 9]].forEach(([x, z]) => { add(new THREE.Mesh(new THREE.BoxGeometry(6, 4, 6), TM(wallT)), x, 2, z); add(new THREE.Mesh(new THREE.ConeGeometry(5, 3, 4), TM(roofT)), x, 5.5, z).rotation.y = Math.PI / 4; });
-for (let i = 0; i < 260; i++) {
-    let a = rnd(0, 6.28), d = rnd(TOWN + 4, WORLD), x = Math.cos(a) * d, z = Math.sin(a) * d, h = rnd(3, 6);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(.3, .4, h * .4, 6), barkM), x, h * .2, z);
-    const lf = add(new THREE.Mesh(new THREE.ConeGeometry(h * .45, h, 7), leafM), x, h * .4 + h * .5, z);
-    lf.userData.ph = rnd(0, 6);
-    sway.push(lf);
-}
-for (let i = 0; i < 60; i++) {
-    let a = rnd(0, 6.28), d = rnd(TOWN + 3, WORLD);
-    add(new THREE.Mesh(new THREE.DodecahedronGeometry(rnd(.5, 1.4)), TM(rockT)), Math.cos(a) * d, .4, Math.sin(a) * d);
-}
-{
-    const N = 2200, im = new THREE.InstancedMesh(new THREE.ConeGeometry(.12, .7, 4), new THREE.MeshLambertMaterial({ color: 0x5fae4a }), N), o = new THREE.Object3D();
-    for (let i = 0; i < N; i++) {
-        const a = rnd(0, 6.28), d = Math.sqrt(Math.random()) * WORLD * 1.1;
-        if (d < TOWN + 1) {
-            i--;
-            continue;
+// ----- zone-specific scenery (instanced) -----
+const leafN = tex((g, w) => speck(g, w, '#d8d8d8', ['#ffffff', '#b0b0b0', '#ececec'], 2000, 6), 2);
+const barkN = tex((g, w) => speck(g, w, '#9a9a9a', ['#808080', '#b4b4b4'], 1500, 40), 1);
+const rockN = tex((g, w) => speck(g, w, '#bdbdbd', ['#a0a0a0', '#d4d4d4', '#e6e6e6'], 1800, 5), 1);
+const leafNM = TM(leafN), barkNM = TM(barkN), rockNM = TM(rockN), tuftM = new THREE.MeshLambertMaterial({ color: 0xffffff });
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function pt(zi, minD) {
+    for (let k = 0; k < 60; k++) {
+        let x, z;
+        if (zi === 0) {
+            const a = rnd(0, 6.283), d = rnd(minD, R0 - 2);
+            x = Math.cos(a) * d;
+            z = Math.sin(a) * d;
         }
-        o.position.set(Math.cos(a) * d, .3, Math.sin(a) * d);
-        o.rotation.set(rnd(-.2, .2), rnd(0, 6), rnd(-.2, .2));
-        o.scale.setScalar(rnd(.7, 1.6));
+        else {
+            x = rnd(-WORLD + 6, WORLD - 6);
+            z = rnd(-WORLD + 6, WORLD - 6);
+            if (zoneAt(x, z) !== zi)
+                continue;
+        }
+        return [x, z];
+    }
+    return null;
+}
+function inst(geo, mat, items) {
+    const im = new THREE.InstancedMesh(geo, mat, items.length), o = new THREE.Object3D(), c = new THREE.Color();
+    items.forEach((it, i) => {
+        o.position.set(it.x, it.y, it.z);
+        o.rotation.set(it.rx || 0, it.ry || 0, it.rz || 0);
+        o.scale.set(it.sx, it.sy, it.sz);
         o.updateMatrix();
         im.setMatrixAt(i, o.matrix);
-    }
+        if (it.col != null)
+            im.setColorAt(i, c.setHex(it.col));
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor)
+        im.instanceColor.needsUpdate = true;
+    im.frustumCulled = false;
     S.add(im);
+    return im;
 }
-for (let i = 0; i < 9; i++) {
+const GREENS = [0x2a6e34, 0x1f5a2a, 0x35803e], AUT = [0xd2691e, 0xe8a317, 0xb83a1a, 0xc98a1a, 0x8a4a1a], SNOWC = [0xe8f2f8, 0xcfe6ee, 0x9fc4b4], FEN = [0x2f5a4a, 0x3a6a52, 0x264a40];
+const gCone = new THREE.ConeGeometry(1, 1, 7), gBall = new THREE.SphereGeometry(1, 8, 6), gTrunk = new THREE.CylinderGeometry(.3, .4, 1, 6), gRock = new THREE.DodecahedronGeometry(1);
+function forest(zi, n, kind, cols) {
+    const T = [], C = [];
+    for (let i = 0; i < n; i++) {
+        const p = pt(zi, TOWN + 4);
+        if (!p)
+            continue;
+        const h = rnd(3, 7) * (kind == 'oak' ? 1.2 : 1), col = pick(cols);
+        T.push({ x: p[0], y: h * .2, z: p[1], sx: 1, sy: h * .4, sz: 1, col: 0x6a4a2a });
+        if (kind == 'pine')
+            C.push({ x: p[0], y: h * .9, z: p[1], sx: h * .45, sy: h, sz: h * .45, col });
+        else
+            C.push({ x: p[0], y: h * .85, z: p[1], sx: h * .55, sy: h * .45, sz: h * .55, col, ry: rnd(0, 6) });
+    }
+    inst(gTrunk, barkNM, T);
+    inst(kind == 'pine' ? gCone : gBall, leafNM, C);
+}
+forest(0, 130, 'pine', GREENS);
+forest(3, 520, 'oak', AUT);
+forest(1, 400, 'pine', SNOWC);
+forest(4, 300, 'pine', FEN);
+{
+    const B = [], A = [];
+    for (let i = 0; i < 170; i++) {
+        const p = pt(2, 0);
+        if (!p)
+            continue;
+        const h = rnd(2.5, 6);
+        B.push({ x: p[0], y: h / 2, z: p[1], sx: 1.6, sy: h, sz: 1.6, col: 0x5a8a3a });
+        A.push({ x: p[0] + .8, y: h * .6, z: p[1], sx: 1.1, sy: h * .35, sz: 1.1, col: 0x5a8a3a }, { x: p[0] - .8, y: h * .45, z: p[1], sx: 1.1, sy: h * .3, sz: 1.1, col: 0x5a8a3a });
+    }
+    inst(gTrunk, leafNM, B);
+    inst(gTrunk, leafNM, A);
+}
+function rocks(zi, n, cols) {
+    const R = [];
+    for (let i = 0; i < n; i++) {
+        const p = pt(zi, TOWN + 3);
+        if (!p)
+            continue;
+        const s = rnd(.5, 1.7);
+        R.push({ x: p[0], y: s * .4, z: p[1], sx: s, sy: s * .8, sz: s, col: pick(cols), ry: rnd(0, 6) });
+    }
+    inst(gRock, rockNM, R);
+}
+rocks(0, 40, [0x777777, 0x888888]);
+rocks(1, 120, [0xaac4d6, 0xd4e4ee, 0x8aa6b8]);
+rocks(2, 140, [0xc9a05a, 0xb8884a, 0xd8b878]);
+rocks(3, 90, [0x8a6a4a, 0x6a5a4a]);
+rocks(4, 120, [0x5a6a64, 0x4a5a56]);
+function tufts(zi, n, cols, geo, y) {
+    const R = [];
+    for (let i = 0; i < n; i++) {
+        const p = pt(zi, TOWN + 1);
+        if (!p)
+            continue;
+        R.push({ x: p[0], y: y || .3, z: p[1], sx: rnd(.7, 1.6), sy: rnd(.7, 1.6), sz: rnd(.7, 1.6), col: pick(cols), rx: rnd(-.2, .2), ry: rnd(0, 6), rz: rnd(-.2, .2) });
+    }
+    inst(geo, tuftM, R);
+}
+const gTuft = new THREE.ConeGeometry(.12, .7, 4), gReed = new THREE.ConeGeometry(.1, 1.4, 4), gSnow = new THREE.SphereGeometry(.5, 6, 4);
+tufts(0, 2200, [0x5fae4a, 0x4e9a3e], gTuft);
+tufts(3, 2600, [0xd9892b, 0xe8b23a, 0xb5651d], gTuft);
+tufts(4, 2200, [0x3f7a5a, 0x4a8a64, 0x2e5a48], gReed, .6);
+tufts(2, 800, [0xc9b06a, 0xb8964a], gTuft);
+tufts(1, 900, [0xffffff, 0xdbe9f2], gSnow, .1);
+for (let i = 0; i < 26; i++) {
     const c = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
     for (let k = 0; k < 4; k++)
         add(new THREE.Mesh(new THREE.SphereGeometry(rnd(5, 9), 8, 6), m), k * 7 - 10, rnd(-1, 2), rnd(-3, 3), c);
-    c.position.set(rnd(-200, 200), rnd(55, 75), rnd(-200, 200));
+    c.position.set(rnd(-WORLD, WORLD), rnd(55, 75), rnd(-WORLD, WORLD));
     c.scale.y = .5;
     S.add(c);
     clouds.push(c);
+}
+// ----- landmarks -----
+add(new THREE.Mesh(new THREE.ConeGeometry(32, 38, 4), M(0xcfa86a)), 330, 19, -40).rotation.y = PI / 4;
+add(new THREE.Mesh(new THREE.ConeGeometry(14, 16, 4), M(0xc49a5a)), 380, 8, 40).rotation.y = PI / 4;
+{
+    const o = new THREE.Mesh(new THREE.CircleGeometry(13, 24), new THREE.MeshLambertMaterial({ color: 0x3a9ad0 }));
+    o.rotation.x = -PI / 2;
+    o.position.set(250, .12, 70);
+    S.add(o);
+    for (let i = 0; i < 6; i++) {
+        const a = i * 1.05, px = 250 + Math.cos(a) * 15, pz = 70 + Math.sin(a) * 15;
+        add(new THREE.Mesh(new THREE.CylinderGeometry(.25, .4, 6, 6), M(0x8a6a3a)), px, 3, pz);
+        add(new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.2, 7), M(0x3f8a3a)), px, 6.4, pz);
+    }
+}
+{
+    const o = new THREE.Mesh(new THREE.CircleGeometry(30, 32), new THREE.MeshLambertMaterial({ color: 0xa8d8f0 }));
+    o.rotation.x = -PI / 2;
+    o.position.set(60, .12, -260);
+    S.add(o);
+    for (let i = 0; i < 9; i++)
+        add(new THREE.Mesh(new THREE.ConeGeometry(rnd(2, 4), rnd(10, 22), 5), new THREE.MeshLambertMaterial({ color: 0xbfe6ff, transparent: true, opacity: .85 })), -90 + rnd(-25, 25), 7, -330 + rnd(-25, 25));
+}
+add(new THREE.Mesh(new THREE.CylinderGeometry(3, 4.5, 24, 10), M(0x5a3a1a)), -30, 12, 330);
+add(new THREE.Mesh(new THREE.SphereGeometry(19, 12, 9), M(0xe07a1a)), -30, 32, 330).scale.y = .7;
+{
+    const P2 = [];
+    for (let i = 0; i < 40; i++) {
+        const s = rnd(.6, 1.1);
+        P2.push({ x: 30 + rnd(-22, 22), y: s * .6, z: 300 + rnd(-22, 22), sx: s, sy: s * .8, sz: s, col: pick([0xe8761a, 0xf08a24, 0xd96a12]) });
+    }
+    inst(new THREE.SphereGeometry(.8, 8, 6), tuftM, P2);
+}
+for (let i = 0; i < 7; i++) {
+    const a = i / 7 * 6.28, px = -300 + Math.cos(a) * 9, pz = 40 + Math.sin(a) * 9, h = rnd(4, 8);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.9, 1.1, h, 10), TM(stoneT)), px, h / 2, pz);
+}
+[[-260, -60, 10], [-340, 120, 14], [-200, 150, 9]].forEach(([x, z, r]) => {
+    const o = new THREE.Mesh(new THREE.CircleGeometry(r, 24), new THREE.MeshLambertMaterial({ color: 0x2a4a58 }));
+    o.rotation.x = -PI / 2;
+    o.position.set(x, .12, z);
+    S.add(o);
+});
+// ----- weather (rain, snow, sand, leaves) -----
+function mkWx(kind, n, color, size, cols) {
+    const g = new THREE.BufferGeometry(), r = kind == 'rain' ? 6 : 3, pos = new Float32Array(n * r);
+    for (let i = 0; i < n; i++) {
+        const x = rnd(-40, 40), y = rnd(0, 30), z = rnd(-40, 40);
+        pos[i * r] = x;
+        pos[i * r + 1] = y;
+        pos[i * r + 2] = z;
+        if (kind == 'rain') {
+            pos[i * r + 3] = x + .2;
+            pos[i * r + 4] = y + .9;
+            pos[i * r + 5] = z;
+        }
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    let m;
+    if (kind == 'rain')
+        m = new THREE.LineBasicMaterial({ color, transparent: true, opacity: .5 });
+    else {
+        if (cols) {
+            const ca = new Float32Array(n * 3), c = new THREE.Color();
+            for (let i = 0; i < n; i++) {
+                c.setHex(pick(cols));
+                ca[i * 3] = c.r;
+                ca[i * 3 + 1] = c.g;
+                ca[i * 3 + 2] = c.b;
+            }
+            g.setAttribute('color', new THREE.BufferAttribute(ca, 3));
+        }
+        m = new THREE.PointsMaterial({ color: cols ? 0xffffff : color, size, transparent: true, opacity: .9, depthWrite: false, vertexColors: !!cols });
+    }
+    const o = kind == 'rain' ? new THREE.LineSegments(g, m) : new THREE.Points(g, m);
+    o.frustumCulled = false;
+    o.visible = false;
+    S.add(o);
+    return { o, g, pos, n, r, kind };
+}
+const WX = { rain: mkWx('rain', 900, 0xaecbe8), snow: mkWx('snow', 1100, 0xffffff, .35), sand: mkWx('sand', 500, 0xe6c88a, .18), leaf: mkWx('leaf', 450, 0xd2691e, .5, [0xd2691e, 0xe8a317, 0xb83a1a, 0xc98a1a]) };
+const WXC = { rain: { i: 4, fall: 30, dx: -4 }, snow: { i: 1, fall: 3, dx: 1.2 }, sand: { i: 2, fall: -.3, dx: 14 }, leaf: { i: 3, fall: 2.2, dx: 2 } };
+function wxTick(dt, t, w) {
+    for (const k in WX) {
+        const s = WX[k], c = WXC[k], wt = G.on ? 0 : w[c.i];
+        s.o.visible = wt > .04;
+        if (!s.o.visible)
+            continue;
+        s.o.material.opacity = Math.min(1, wt * 1.4) * (k == 'rain' ? .55 : .9);
+        const p = s.pos, r = s.r, px = P.pos.x, pz = P.pos.z, py = P.pos.y - 1;
+        for (let i = 0; i < s.n; i++) {
+            const j = i * r;
+            let x = p[j], y = p[j + 1], z = p[j + 2];
+            y -= c.fall * dt;
+            x += (c.dx + (k == 'leaf' || k == 'snow' ? Math.sin(t * 1.5 + i) * 1.5 : 0)) * dt;
+            x = px + (((x - px + 40) % 80) + 80) % 80 - 40;
+            z = pz + (((z - pz + 40) % 80) + 80) % 80 - 40;
+            y = py + (((y - py) % 30) + 30) % 30;
+            p[j] = x;
+            p[j + 1] = y;
+            p[j + 2] = z;
+            if (k == 'rain') {
+                p[j + 3] = x + .2;
+                p[j + 4] = y + .9;
+                p[j + 5] = z;
+            }
+        }
+        s.g.attributes.position.needsUpdate = true;
+    }
+}
+// ----- zone tracking, sky/fog/light blending, lightning -----
+const SKYC = ZONES.map(z => new THREE.Color(z.sky)), tmpC = new THREE.Color(), flEl = document.createElement('div');
+flEl.style.cssText = 'position:fixed;inset:0;background:#dfe8ff;opacity:0;pointer-events:none;z-index:2;transition:opacity .25s';
+document.body.appendChild(flEl);
+let zoneNow = 0, zoneSeen = new Set([0]), zoneT = 0, flashT = 8;
+function zoneTick(dt, t) {
+    const w = G.on ? [1, 0, 0, 0, 0] : zoneW(P.pos.x, P.pos.z, 16);
+    tmpC.setRGB(0, 0, 0);
+    let fn = 0, ff = 0, hi = 0, si = 0;
+    w.forEach((v, k) => { if (!v)
+        return; const c = SKYC[k]; tmpC.r += c.r * v; tmpC.g += c.g * v; tmpC.b += c.b * v; fn += ZONES[k].fn * v; ff += ZONES[k].ff * v; hi += ZONES[k].hi * v; si += ZONES[k].si * v; });
+    const a = Math.min(1, dt * 1.5);
+    S.background.lerp(tmpC, a);
+    S.fog.color.copy(S.background);
+    S.fog.near += (fn - S.fog.near) * a;
+    S.fog.far += (ff - S.fog.far) * a;
+    hemi.intensity += (hi - hemi.intensity) * a;
+    sun.intensity += (si - sun.intensity) * a;
+    wxTick(dt, t, w);
+    if (w[4] > .6) {
+        flashT -= dt;
+        if (flashT <= 0) {
+            flashT = rnd(7, 16);
+            flEl.style.opacity = .55;
+            setTimeout(() => { flEl.style.opacity = 0; }, 90);
+            if (Math.random() < .6)
+                setTimeout(() => { flEl.style.opacity = .4; setTimeout(() => { flEl.style.opacity = 0; }, 80); }, 220);
+        }
+    }
+    if (G.on || DU)
+        return;
+    const z = zoneAt(P.pos.x, P.pos.z);
+    if (z !== zoneNow) {
+        zoneT += dt;
+        if (zoneT > .8) {
+            zoneNow = z;
+            zoneT = 0;
+            const Zo = ZONES[z];
+            bn(Zo.e + ' ' + Zo.n, 2600);
+            say('<span style="color:' + Zo.c + '">Entering ' + Zo.n + ' — monsters Lv ' + Zo.lv + '</span>');
+            if (!zoneSeen.has(z)) {
+                zoneSeen.add(z);
+                const xp = 60 * P.lvl + 40;
+                addXP(xp);
+                say('<b style="color:#ffe066">New zone discovered! +' + xp + ' xp</b>');
+            }
+        }
+    }
+    else
+        zoneT = 0;
 }
 const fire = add(new THREE.Mesh(new THREE.ConeGeometry(.6, 1.6, 7), new THREE.MeshBasicMaterial({ color: 0xff8a1f })), -5, .9, 0), fl = new THREE.PointLight(0xff8833, 1.2, 25);
 fl.position.set(-5, 2, 0);
@@ -508,10 +874,12 @@ function hero(col, cls) {
     g.w = w;
     return g;
 }
-const MOBS = [['Wolf', 0x777777, 1], ['Bandit', 0xa0522d, 1.2], ['Ogre', 0x6b8e23, 1.9], ['Wraith', 0x9b59b6, 1.5]];
+const MOBS = [['Wolf', 0x777777, 1, 1], ['Bandit', 0xa0522d, 1.2, 0], ['Ogre', 0x6b8e23, 1.9, 0], ['Wraith', 0x9b59b6, 1.5, 0],
+    ['Frost Wolf', 0xbcd8ee, 1.15, 1], ['Ice Golem', 0x9fd4ff, 2.1, 0], ['Sand Scorpion', 0xc9a45a, 1.2, 1], ['Dune Wraith', 0xe0b060, 1.6, 0],
+    ['Thornback Boar', 0x8a4a22, 1.3, 1], ['Pumpkin Brute', 0xe07a1a, 1.9, 0], ['Bog Lurker', 0x3d6a4a, 1.7, 0], ['Storm Spirit', 0x6a7ad8, 1.5, 0]];
 function mobMesh(ty) {
     const [, c, s] = MOBS[ty], g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c, map: fur });
-    add(new THREE.Mesh(new THREE.SphereGeometry(.8, 12, 10), M(c)), 0, .9 * s, 0, g).scale.set(s, s * (ty == 0 ? .7 : 1.2), s * (ty == 0 ? 1.4 : 1));
+    add(new THREE.Mesh(new THREE.SphereGeometry(.8, 12, 10), M(c)), 0, .9 * s, 0, g).scale.set(s, s * (MOBS[ty][3] ? .7 : 1.2), s * (MOBS[ty][3] ? 1.4 : 1));
     add(new THREE.Mesh(new THREE.SphereGeometry(.4 * s, 10, 8), M(c)), 0, 1.6 * s, .5 * s, g);
     [-.18, .18].forEach(x => add(new THREE.Mesh(new THREE.SphereGeometry(.07 * s, 6, 6), new THREE.MeshBasicMaterial({ color: 0xff2222 })), x * s, 1.7 * s, .85 * s, g));
     const bg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, .18), new THREE.MeshBasicMaterial({ color: 0x000000 })), 0, 2.8 * s, 0, g), fg = add(new THREE.Mesh(new THREE.PlaneGeometry(1.6, .18), new THREE.MeshBasicMaterial({ color: 0xdd3333 })), 0, 2.8 * s, .01, g);
@@ -552,10 +920,21 @@ function hit(m, d) { if (!m || G.cd > 0 || (DU && (DU.cd > 0 || (DU.over && DU.b
     kill(m); }
 function heal(f) { const h = Math.round(P.max * f); P.hp = Math.min(P.max, P.hp + h); float(P.pos, '+' + h, '#6f6'); burst(P.pos, 0x66ff88, 12, 1.5); }
 function nova() { const r = new THREE.Mesh(new THREE.RingGeometry(.5, 1, 32), new THREE.MeshBasicMaterial({ color: 0x66ccff, side: 2, transparent: true })); r.rotation.x = -Math.PI / 2; r.position.copy(P.pos).y = .3; S.add(r); bolts.push({ ring: r, t: 0 }); }
+const ZMOB = [[0, 1, 2], [4, 5], [6, 7], [8, 9], [10, 11]];
 function spawn() {
     if (!window.SP)
         return;
-    const a = rnd(0, 6.28), d = rnd(TOWN + 10, WORLD - 8), x = Math.cos(a) * d, z = Math.sin(a) * d, lvl = 1 + Math.floor(d / 26), ty = Math.min(3, Math.floor(lvl / 2)), mesh = mobMesh(ty);
+    const w = rnd(0, 1), zi = w < .22 ? 0 : 1 + Math.min(3, Math.floor((w - .22) / .195));
+    let p = null;
+    for (let k = 0; k < 40 && !p; k++) {
+        const q = pt(zi, TOWN + 10);
+        if (q && Math.hypot(q[0], q[1]) > TOWN + 10)
+            p = q;
+    }
+    if (!p)
+        p = [30, 30];
+    const x = p[0], z = p[1], d = Math.hypot(x, z), zz = zoneAt(x, z);
+    const lvl = zz === 0 ? 1 + Math.floor(d / 35) : Math.min(18, 4 + Math.floor((d - R0) / 32)), list = ZMOB[zz], ty = zz === 0 ? list[Math.min(2, Math.floor(lvl / 2))] : list[Math.min(1, Math.floor((lvl - 4) / 5))], mesh = mobMesh(ty);
     mesh.position.set(x, 0, z);
     S.add(mesh);
     mesh.traverse(o => { if (o.isMesh && o.material.isMeshLambertMaterial)
@@ -673,7 +1052,8 @@ function mountMeshOld(d) {
     }
     return g;
 }
-function jump() { if ((P.jy || 0) < .05) {
+function jump() { if (G.cd > 0 || (DU && DU.cd > 0))
+    return; if ((P.jy || 0) < .05) {
     P.vy = P.mount ? 11 : 10.5;
     P.jy = .06;
 } }
@@ -791,7 +1171,7 @@ function mountMesh(d) {
     return g;
 }
 const G = { on: false, diff: 1, cd: 0 }, PTS = [], PV = { duel: { x: 600, z: 0, r: 22 }, arena: { x: 600, z: 100, r: 34 }, bg: { x: 600, z: 300, r: 90 } };
-let bots = [], pvBuilt = false, bnT, bgCastles = [], bgGates = [];
+let bots = [], pvBuilt = false, bnT, bgCastles = [], bgGates = [], camBlock = [], camRay = new THREE.Raycaster();
 const BG_GATE_OFFSET = 14, BG_CASTLE_HALF = 14, BG_CASTLE_DEPTH = 16;
 const shf = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(x => x[1]);
 function bn(s, ms) { const e = $('bn'); e.textContent = s; e.style.display = 'block'; clearTimeout(bnT); if (ms)
@@ -885,6 +1265,14 @@ function buildPvP() {
         r.castShadow = true;
         S.add(r);
     }
+    // Things the camera must not pass through: arena walls, pillars, castle blocks and gates.
+    camBlock = [];
+    S.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type == 'CylinderGeometry' && o.geometry.parameters && (o.geometry.parameters.openEnded || o.geometry.parameters.radiusTop > .5))
+        camBlock.push(o); });
+    const addBoxes = g => g.traverse(o => { if (o.isMesh && o.geometry.type == 'BoxGeometry')
+        camBlock.push(o); });
+    bgCastles.forEach(addBoxes);
+    bgGates.forEach(g => addBoxes(g.mesh));
 }
 function mkBot(cls, team, x, z, idx) {
     const k = CL[cls], mesh = hero(k.col, cls);
@@ -905,13 +1293,15 @@ function mkBot(cls, team, x, z, idx) {
     const mx = k.hp + 20 * (P.lvl - 1);
     return { bot: 1, ally: !team, team, cls, mesh, pos: mesh.position, hp: mx, max: mx, lvl: P.lvl, name: cls[0].toUpperCase() + cls.slice(1) + (team ? ' (Enemy)' : ' (Ally)'), cd: rnd(0, 1), sw: 0, slow: 0, aggro: false, mv: 0, rng: ['mage', 'hunter', 'warlock', 'priest'].includes(cls), k: { warrior: 1.3, rogue: 1.7, paladin: 1.4, mage: 1.8, warlock: 1.7, hunter: 1.5, priest: 1.2 }[cls], bgp: grp, fg, id: idx, dead: false, rs: 0 };
 }
-function foeHit(t, d) { if (G.cd > 0 || t.dead)
+function foeHit(t, d, src) { if (G.cd > 0 || t.dead)
     return; if (t === P) {
     if (P.shield > 0) {
         const a = Math.min(P.shield, d);
         P.shield -= a;
         d -= a;
     }
+    if (ADM.thorns && src)
+        thornsQ.push(src);
     P.hp -= d;
     float(P.pos, d ? '-' + d : 'absorbed', d ? '#f55' : '#8cf');
     if (d > 0) {
@@ -980,10 +1370,10 @@ function botAI(b, dt, t) {
                         o.position.copy(b.pos);
                         o.position.y += 2;
                         S.add(o);
-                        bolts.push({ b: o, m: tg, d: dm, c: col });
+                        bolts.push({ b: o, m: tg, d: dm, c: col, src: b });
                     }
                     else
-                        foeHit(tg, dm);
+                        foeHit(tg, dm, b);
                 }
             }
         }
@@ -1257,12 +1647,12 @@ function wbSwing(b, tg, dm, byMob) {
         o.position.copy(b.pos);
         o.position.y += 2;
         S.add(o);
-        bolts.push({ b: o, m: tg, d: dm, c: col, wbBy: byMob ? b : null });
+        bolts.push({ b: o, m: tg, d: dm, c: col, wbBy: byMob ? b : null, src: b });
     }
     else if (byMob)
         wbHitMob(tg, dm, b);
     else
-        foeHit(tg, dm);
+        foeHit(tg, dm, b);
 }
 function wbAI(b, dt, t) {
     b.slow = Math.max(0, b.slow - dt);
@@ -1357,7 +1747,7 @@ function wbAI(b, dt, t) {
     }
     else {
         if (!b.wp || Math.hypot(b.wp.x - b.pos.x, b.wp.z - b.pos.z) < 2) {
-            const R = Math.min(WORLD - 12, (b.lvl + 1) * 24), a = rnd(0, 6.28), d = rnd(TOWN + 6, Math.max(TOWN + 12, R));
+            const R = Math.min(b.lvl >= 5 ? WORLD - 12 : R0 - 8, (b.lvl + 1) * 24), a = rnd(0, 6.28), d = rnd(TOWN + 6, Math.max(TOWN + 12, R));
             b.wp = { x: Math.cos(a) * d, z: Math.sin(a) * d };
         }
         go(b.wp.x, b.wp.z, sp * .8);
@@ -1508,9 +1898,48 @@ function renderBP() {
     }
 }
 
+// ===== Admin panel (R) =====
+const ADM = { regen: false, thorns: false, speed: false, hacc: 0 }, thornsQ = [];
+const ADM_B = [
+    ['regen', '❤️', 'Regeneration', '+20 HP every second', '#9a2a3a'],
+    ['thorns', '🌹', 'Thorns', 'Attackers take 20 damage', '#3a8a2a'],
+    ['speed', '⚡', 'Super Speed', '×2.5 movement speed', '#2a6fd6']
+];
+function toggleAdm() { if (!running)
+    return; const p = $('adm'); p.style.display = p.style.display == 'flex' ? 'none' : 'flex'; renderAdm(); }
+function admToggle(k) { ADM[k] = !ADM[k]; renderAdm(); const b = ADM_B.find(x => x[0] == k); say('<span style="color:#4fc3ff">[R] ' + b[2] + (ADM[k] ? ' enabled' : ' disabled') + '</span>'); }
+function admOff() { ADM.regen = ADM.thorns = ADM.speed = false; renderAdm(); say('<span style="color:#4fc3ff">[R] All buffs disabled</span>'); }
+function renderAdm() {
+    $('adm').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4a9cff,#0b2a66);border:2px solid #e8b84a;color:#fff;font-weight:bold;font-size:17px;vertical-align:middle;margin-right:8px">R</span><b style="color:var(--gold);vertical-align:middle">Admin Panel — Buffs</b><span onclick="toggleAdm()" style="float:right;cursor:pointer">✕</span><div style="margin:10px 0;font-size:12px;opacity:.8">Click a buff to switch it on or off. R or Esc to close.</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${ADM_B.map(([k, e, n, d, c]) => `<div class="sl" onclick="admToggle('${k}')" style="cursor:pointer;width:150px;height:140px;background:radial-gradient(circle at 50% 35%,${c},#050505 85%);border-color:${ADM[k] ? '#fff' : '#7a5a22'};box-shadow:${ADM[k] ? '0 0 14px #4fc3ff' : 'none'}"><i class="ic" style="font-size:46px;top:10px">${e}</i><span style="font-size:13px;bottom:62px;background:none">${n}</span><em style="bottom:30px;color:#fff;font-size:11px">${d}</em><em style="bottom:6px;color:${ADM[k] ? '#6f6' : '#aaa'};font-size:12px">${ADM[k] ? '● ON' : '○ OFF'}</em></div>`).join('')}</div><div style="margin-top:12px"><button onclick="admOff()" style="padding:4px 14px;font-size:13px">Disable all</button></div></div>`;
+}
+function admTick(dt, t) {
+    while (thornsQ.length) {
+        const m = thornsQ.pop();
+        if (mobs.indexOf(m) >= 0) {
+            burst(m.pos, 0x55cc33, 6);
+            hit(m, 20);
+        }
+    }
+    if (ADM.regen && !P.dead && P.hp > 0 && P.hp < P.max) {
+        ADM.hacc += dt;
+        if (ADM.hacc >= 1) {
+            ADM.hacc -= 1;
+            P.hp = Math.min(P.max, P.hp + 20);
+            float(P.pos, '+20', '#6f6');
+        }
+    }
+    const s = ADM_B.filter(b => ADM[b[0]]).map(b => b[1]).join(' '), bf = $('abf');
+    if (bf.dataset.s !== s) {
+        bf.dataset.s = s;
+        bf.style.display = s ? 'block' : 'none';
+        bf.innerHTML = '<b style="color:#4fc3ff">R</b> ' + s;
+    }
+}
 function MOUNTANIM(dt, t) {
     pvpTick(dt, t);
     wbTick(dt, t);
+    zoneTick(dt, t);
+    admTick(dt, t);
     if (P.cast) {
         if (P.mv) {
             P.cast = null;
@@ -1566,7 +1995,7 @@ function togglePause() { if (!running)
     return; if (mapOpen)
     return toggleMap(); if ($('mb').style.display == 'flex')
     return toggleBook(); if ($('pv').style.display == 'flex')
-    return togglePvP(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
+    return togglePvP(); if ($('adm').style.display == 'flex') return toggleAdm(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
 function toggleMap() { if (!running)
     return; mapOpen = !mapOpen; $('map').style.display = mapOpen ? 'flex' : 'none'; if (mapOpen)
     drawMap(); }
@@ -1578,7 +2007,7 @@ function toMenu() {
     paused = false;
     mapOpen = false;
     window.SP = 0;
-    ['pause', 'map', 'mb', 'cb'].forEach(i => $(i).style.display = 'none');
+    ['pause', 'map', 'mb', 'cb', 'adm'].forEach(i => $(i).style.display = 'none');
     clearKeys();
     S.remove(P.mesh);
     mobs.forEach(m => S.remove(m.mesh));
@@ -1596,18 +2025,41 @@ function toMenu() {
 }
 function drawMap() {
     const c = $('mc'), g = c.getContext('2d'), W = c.width, K = W / (WORLD * 2), X = x => (x + WORLD) * K, Z = z => (z + WORLD) * K;
-    g.fillStyle = '#2f5f2c';
-    g.fillRect(0, 0, W, W);
-    for (let k = 1; k <= 6; k++) {
-        const r = 26 * k * K;
-        g.strokeStyle = 'rgba(255,255,255,.2)';
-        g.beginPath();
-        g.arc(X(0), Z(0), r, 0, 6.3);
-        g.stroke();
-        g.fillStyle = 'rgba(255,255,255,.6)';
-        g.font = '11px Georgia';
-        g.fillText('Lv ' + (k + 1), X(0) + r * .7 + 2, Z(0) - r * .7);
+    if (!window.ZMAP) {
+        const zc = document.createElement('canvas');
+        zc.width = zc.height = 260;
+        const zg = zc.getContext('2d'), im = zg.createImageData(260, 260);
+        for (let py = 0; py < 260; py++)
+            for (let px = 0; px < 260; px++) {
+                const x = (px / 260 * 2 - 1) * WORLD, z = (py / 260 * 2 - 1) * WORLD, col = ZONES[zoneAt(x, z)].col, i = (py * 260 + px) * 4;
+                im.data[i] = (col >> 16) & 255;
+                im.data[i + 1] = (col >> 8) & 255;
+                im.data[i + 2] = col & 255;
+                im.data[i + 3] = 255;
+            }
+        zg.putImageData(im, 0, 0);
+        window.ZMAP = zc;
     }
+    g.imageSmoothingEnabled = false;
+    g.drawImage(window.ZMAP, 0, 0, W, W);
+    g.strokeStyle = 'rgba(255,255,255,.35)';
+    g.beginPath();
+    g.arc(X(0), Z(0), R0 * K, 0, 6.3);
+    g.stroke();
+    ZONES.forEach((ZN, i) => {
+        const c = [[0, -62], [0, -300], [300, 0], [0, 300], [-300, 0]][i], t = ZN.e + ' ' + ZN.n;
+        g.textAlign = 'center';
+        g.fillStyle = '#fff';
+        g.strokeStyle = '#000';
+        g.lineWidth = 3;
+        g.font = 'bold 13px Georgia';
+        g.strokeText(t, X(c[0]), Z(c[1]));
+        g.fillText(t, X(c[0]), Z(c[1]));
+        g.font = '11px Georgia';
+        g.strokeText('Lv ' + ZN.lv, X(c[0]), Z(c[1]) + 14);
+        g.fillText('Lv ' + ZN.lv, X(c[0]), Z(c[1]) + 14);
+    });
+    g.textAlign = 'left';
     g.fillStyle = '#9a8a6a';
     g.beginPath();
     g.arc(X(0), Z(0), TOWN * K, 0, 6.3);
@@ -1658,8 +2110,8 @@ function ANIM(dt, t) {
     fl.intensity = 1.1 + Math.sin(t * 25) * .25 + Math.random() * .2;
     if (Math.random() < .4)
         burst(new THREE.Vector3(-5, 1, 0), 0xff9933, 1, .6, 0);
-    clouds.forEach(c => { c.position.x += dt * 1.5; if (c.position.x > 230)
-        c.position.x = -230; });
+    clouds.forEach(c => { c.position.x += dt * 1.5; if (c.position.x > WORLD + 80)
+        c.position.x = -WORLD - 80; });
     mobs.slice().forEach(m => { if (m.dot) {
         m.dot.a = (m.dot.a || 0) + dt;
         if (m.dot.a >= 1) {
@@ -1711,9 +2163,11 @@ function start(c) {
         o.castShadow = true; });
     P.pos = P.mesh.position;
     P.pos.set(0, 0, -3);
-    for (let i = 0; i < 70; i++)
+    for (let i = 0; i < 260; i++)
         spawn();
     wbInit();
+    zoneNow = 0;
+    zoneSeen = new Set([0]);
     Q = { need: 5, have: 0, on: false, done: 0 };
     $('hb').innerHTML = k.ab.map((a, i) => { const ic = ICONS[a.n] || ['❓', '#444']; return `<div class="sl" title="${a.n}" style="background:radial-gradient(circle at 50% 35%,${ic[1]},#050505 85%)"><b>${i + 1}</b><i class="ic">${ic[0]}</i><span>${a.n}</span><em>${a.cost} mp</em><u></u></div>`; }).join('');
     say('Welcome, hero! Speak to the Elder (the golden gem) in town.');
@@ -1726,7 +2180,7 @@ function start(c) {
 }
 function useAbil(i) {
     const a = P.cfg.ab[i];
-    if (P.dead)
+    if (P.dead || G.cd > 0 || (DU && DU.cd > 0))
         return;
     if (P.mount)
         return say('Dismount first (H).');
@@ -1778,6 +2232,9 @@ addEventListener('keydown', e => { const n = KN[e.code]; if (n) {
     return;
 } if (e.code == 'KeyF') {
     nearBot();
+    return;
+} if (e.code == 'KeyR') {
+    toggleAdm();
     return;
 } if (e.code == 'KeyO') {
     togglePvP();
@@ -1852,10 +2309,10 @@ function update(dt, t) {
         v.add(r);
     if (keys.a || keys.arrowleft)
         v.sub(r);
-    const mv = v.lengthSq() > 0 && !P.dead;
+    const frozen = G.cd > 0 || (DU && DU.cd > 0), mv = v.lengthSq() > 0 && !P.dead && !frozen;
     if (mv) {
         v.normalize();
-        P.pos.addScaledVector(v, 9 * dt * (P.mount ? P.mount.sp : 1));
+        P.pos.addScaledVector(v, 9 * dt * (P.mount ? P.mount.sp : 1) * (ADM.speed ? 2.5 : 1));
         P.mesh.rotation.y = Math.atan2(v.x, v.z);
     }
     if (G.on) {
@@ -1948,6 +2405,8 @@ function update(dt, t) {
                     }
                     P.hp -= dm;
                     float(P.pos, dm ? '-' + dm : 'absorbed', dm ? '#f55' : '#8cf');
+                    if (ADM.thorns)
+                        thornsQ.push(m);
                     if (dm > 0) {
                         P.cast = null;
                         if (P.mount)
@@ -1984,7 +2443,7 @@ function update(dt, t) {
             if (b.wbBy)
                 wbHitMob(b.m, b.d, b.wbBy);
             else if (b.m === P || b.m.ally)
-                foeHit(b.m, b.d);
+                foeHit(b.m, b.d, b.src);
             else
                 hit(b.m, b.d);
             if (b.fn)
@@ -2014,7 +2473,26 @@ function update(dt, t) {
     }
     // camera
     const cp = Math.cos(pit);
-    cam.position.set(P.pos.x + Math.sin(yaw) * cp * zoom, P.pos.y + 2 + Math.sin(pit) * zoom, P.pos.z + Math.cos(yaw) * cp * zoom);
+    let cx = P.pos.x + Math.sin(yaw) * cp * zoom, cy = P.pos.y + 2 + Math.sin(pit) * zoom, cz = P.pos.z + Math.cos(yaw) * cp * zoom;
+    if (G.on && camBlock.length) {
+        // pull the camera in front of any wall between it and the player
+        const o = new THREE.Vector3(P.pos.x, P.pos.y + 2, P.pos.z), dv = new THREE.Vector3(cx - o.x, cy - o.y, cz - o.z), len = dv.length() || 1;
+        camRay.set(o, dv.normalize());
+        camRay.far = len;
+        const vis = n => { while (n) {
+            if (!n.visible)
+                return false;
+            n = n.parent;
+        } return true; };
+        const h = camRay.intersectObjects(camBlock, false).find(x => vis(x.object));
+        if (h) {
+            const k = Math.max(2.2, h.distance - .8) / len;
+            cx = o.x + (cx - o.x) * k;
+            cy = o.y + (cy - o.y) * k;
+            cz = o.z + (cz - o.z) * k;
+        }
+    }
+    cam.position.set(cx, Math.max(.6, cy), cz);
     cam.lookAt(P.pos.x, P.pos.y + 2, P.pos.z);
     if (P.t) {
         ring.visible = true;
@@ -2038,11 +2516,11 @@ function hud() {
     }
     else
         tf.style.display = 'none';
-    $('qt').innerHTML = `<b style="color:var(--gold)">Quest</b><br>${Q.on ? `Slay beasts: ${Q.have}/${Q.need}` : 'None — talk to the Elder'}<br><small>${Math.hypot(P.pos.x, P.pos.z) < TOWN ? 'Safe zone' : 'Wilderness'}</small>`;
+    $('qt').innerHTML = `<b style="color:var(--gold)">Quest</b><br>${Q.on ? `Slay beasts: ${Q.have}/${Q.need}` : 'None — talk to the Elder'}<br><small>${Math.hypot(P.pos.x, P.pos.z) < TOWN ? 'Safe zone' : (G.on ? 'Arena' : ZONES[zoneAt(P.pos.x, P.pos.z)].e + ' ' + ZONES[zoneAt(P.pos.x, P.pos.z)].n)}</small>`;
     [...$('hb').children].forEach((s, i) => { const u = s.querySelector('u'), a = P.cfg.ab[i]; u.style.height = P.cds[i] > 0 ? (P.cds[i] / a.cd * 100) + '%' : '0'; u.textContent = P.cds[i] > 0 ? P.cds[i].toFixed(1) : ''; s.style.borderColor = P.mp >= a.cost ? '#e8b84a' : '#555'; });
     const c = $('mm').getContext('2d'), k = .9;
     c.clearRect(0, 0, 120, 120);
-    c.fillStyle = '#244a2a';
+    c.fillStyle = ZONES[G.on ? 0 : zoneAt(P.pos.x, P.pos.z)].mm;
     c.fillRect(0, 0, 120, 120);
     const X = x => 60 + (x - P.pos.x) * k, Z = z => 60 + (z - P.pos.z) * k;
     c.fillStyle = '#9a8a6a';
