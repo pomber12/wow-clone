@@ -19,3 +19,5 @@
 🐎 Маунтове (Mounts): Система за превозни средства/езда, за по-бързо придвижване и специални бонуси.
 
 📈 Нива и Прогресия (Leveling System): Трупане на опит (XP), покачване на нива и отключване на нови показатели.
+
+<img width="1330" height="716" alt="character select" src="https://github.com/user-attachments/assets/490705ce-f1ae-4215-b6f8-5392e317050a" />
