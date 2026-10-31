@@ -264,6 +264,18 @@ button:hover {
   font-size:14px;
   z-index:3;
 }
+#dgw {
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:8;
+  background:#0b0804b0;
+  border:0;
+  border-radius:0;
+  padding:0;
+  font-size:14px;
+}
 #cs {
   position:fixed;
   inset:0;
@@ -331,7 +343,7 @@ button:hover {
   background:#0b0804c8;
   z-index:30;
 }
-.menuMode #pf, .menuMode #tf, .menuMode #qt, .menuMode #mm, .menuMode #log, .menuMode #hb, .menuMode #abtns, .menuMode #admbtn, .menuMode #help, .menuMode #abf, .menuMode #pvh, .menuMode #bp, .menuMode #bn {
+.menuMode #pf, .menuMode #tf, .menuMode #qt, .menuMode #mm, .menuMode #log, .menuMode #hb, .menuMode #abtns, .menuMode #admbtn, .menuMode #help, .menuMode #abf, .menuMode #pvh, .menuMode #bp, .menuMode #bn, .menuMode #pvpf, .menuMode #vig, .menuMode #bossf, .menuMode #dgp {
   display:none !important;
 }
 #bn {
@@ -370,7 +382,7 @@ button:hover {
   right:10px;
   bottom:calc(12px + env(safe-area-inset-bottom,0px));
   display:grid;
-  grid-template-columns:repeat(2,60px);
+  grid-template-columns:repeat(3,60px);
   gap:8px;
   z-index:3;
 }
@@ -470,6 +482,11 @@ button:hover {
 <div id="bp" class="p"></div>
 <div id="adm" class="p"></div>
 <div id="abf" class="p"></div>
+<div id="pvpf" class="p" style="left:10px;top:132px;display:none;color:#ff6b6b;font-weight:bold;z-index:3;padding:2px 10px">⚔ PvP — hostile</div>
+<div id="bossf" class="p" style="left:50%;transform:translateX(-50%);top:66px;width:380px;display:none;text-align:center;z-index:4"></div>
+<div id="dgp" class="p" style="right:10px;top:244px;display:none;z-index:3;font-size:13px;max-width:200px"></div>
+<div id="dgw" class="p"></div>
+<div id="vig" style="position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 130px 25px rgba(220,30,30,.55);opacity:0;transition:opacity .4s;z-index:2"></div>
 <div id="cb" class="p" style="left:50%;transform:translateX(-50%);bottom:100px;width:220px;display:none;text-align:center">Summoning mount…<div class="bar">
 <i id="cbi" style="background:#e8b84a;width:0">
 </i>
@@ -480,6 +497,7 @@ button:hover {
 <button onclick="toggleMap()" title="Map (M)"><i>🗺️</i><span>Map</span></button>
 <button onclick="toggleBook()" title="Mounts (P)"><i>🐴</i><span>Mounts</span></button>
 <button onclick="togglePvP()" title="PvP (O)"><i>⚔️</i><span>PvP</span></button>
+<button onclick="toggleDg()" title="Dungeons (J)"><i>🏰</i><span>Dungeons</span></button>
 </div>
 <button id="admbtn" onclick="toggleAdm()" title="Admin panel (R)">R</button>
 <div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · F: nearby hero · M: map · Esc: menu</div>
@@ -627,7 +645,106 @@ for (let i = 0; i < gp.count; i++) {
     gcol[i * 3 + 2] = b * n;
 }
 gGeo.setAttribute('color', new THREE.BufferAttribute(gcol, 3));
+// ===== The Pit: a sunken PvP arena in the starting meadow =====
+const ARENA = { x: 52, z: 40, R: 30, F: 18, D: 4.5 };
+function groundH(x, z) {
+    const d = Math.hypot(x - ARENA.x, z - ARENA.z);
+    if (d >= ARENA.R)
+        return 0;
+    if (d <= ARENA.F)
+        return -ARENA.D;
+    const t = (ARENA.R - d) / (ARENA.R - ARENA.F);
+    return -ARENA.D * t * t * (3 - 2 * t);
+}
+{
+    // cut a hole in the ground where the pit goes
+    const ia = gGeo.index.array, keep = [];
+    for (let i = 0; i < ia.length; i += 3) {
+        let inside = false;
+        for (let k = 0; k < 3; k++) {
+            const v = ia[i + k];
+            if (Math.hypot(gp.getX(v) - ARENA.x, -gp.getY(v) - ARENA.z) < ARENA.R) {
+                inside = true;
+                break;
+            }
+        }
+        if (!inside)
+            keep.push(ia[i], ia[i + 1], ia[i + 2]);
+    }
+    gGeo.setIndex(keep);
+}
 const ground = add(new THREE.Mesh(gGeo, new THREE.MeshLambertMaterial({ map: detailT, vertexColors: true })), 0, 0, 0);
+const pitFlames = [];
+(function buildPit() {
+    const NR = 36, NS = 72, RO = 37, pos = [], col = [], uv = [], idx = [], cm = c => [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
+    const cG = cm(0x4b9a44), cS = cm(0x8a6a44), cF = cm(0xcdb078);
+    for (let i = 0; i <= NR; i++) {
+        const r = RO * i / NR;
+        for (let j = 0; j <= NS; j++) {
+            const a = j / NS * Math.PI * 2, x = ARENA.x + Math.cos(a) * r, z = ARENA.z + Math.sin(a) * r;
+            pos.push(x, groundH(x, z) + .03, z);
+            const tS = Math.min(1, Math.max(0, (ARENA.R + 2 - r) / 4)), tF = Math.min(1, Math.max(0, (ARENA.F + 3 - r) / 5)), n = .92 + Math.random() * .16;
+            const c = [0, 1, 2].map(k => (cG[k] * (1 - tS) + cS[k] * tS) * (1 - tF) + cF[k] * tF);
+            col.push(c[0] * n, c[1] * n, c[2] * n);
+            uv.push((x + WORLD * 1.1) / (WORLD * 2.2), (WORLD * 1.1 - z) / (WORLD * 2.2));
+        }
+    }
+    for (let i = 0; i < NR; i++)
+        for (let j = 0; j < NS; j++) {
+            const a = i * (NS + 1) + j, b = a + NS + 1;
+            idx.push(a, a + 1, b, b, a + 1, b + 1);
+        }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    const bowl = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: detailT, vertexColors: true, side: 2 }));
+    bowl.receiveShadow = true;
+    S.add(bowl);
+    const flat = (g, y, mat) => { const m = new THREE.Mesh(g, mat); m.rotation.x = -Math.PI / 2; m.position.set(ARENA.x, y, ARENA.z); S.add(m); return m; };
+    const floorY = -ARENA.D + .07;
+    flat(new THREE.RingGeometry(ARENA.F - 1.4, ARENA.F, 64), floorY, TM(stoneT));
+    flat(new THREE.RingGeometry(10, 10.5, 64), floorY, new THREE.MeshBasicMaterial({ color: 0xe8b84a, side: 2, transparent: true, opacity: .8 }));
+    flat(new THREE.RingGeometry(3.2, 3.6, 48), floorY, new THREE.MeshBasicMaterial({ color: 0xcc2222, side: 2, transparent: true, opacity: .85 }));
+    [0, Math.PI / 2].forEach(a => { const m = flat(new THREE.PlaneGeometry(14, .5), floorY, new THREE.MeshBasicMaterial({ color: 0x8a1a1a, side: 2, transparent: true, opacity: .8 })); m.rotation.z = a; });
+    flat(new THREE.RingGeometry(ARENA.R, ARENA.R + 2.2, 64), .07, TM(stoneT));
+    for (let i = 0; i < 16; i++) {
+        const a = i / 16 * Math.PI * 2, rr = ARENA.R + 1.6, x = ARENA.x + Math.cos(a) * rr, z = ARENA.z + Math.sin(a) * rr;
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(.9, 1.1, 6, 10), TM(stoneT));
+        p.position.set(x, 3, z);
+        p.castShadow = true;
+        S.add(p);
+        const fl = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.5, 7), new THREE.MeshBasicMaterial({ color: 0xff8a2a }));
+        fl.position.set(x, 6.8, z);
+        S.add(fl);
+        pitFlames.push(fl);
+        const bn2 = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 3.2), new THREE.MeshLambertMaterial({ color: i % 2 ? 0x9a1a1a : 0x2a2a3a, side: 2 }));
+        bn2.position.set(x - Math.cos(a) * 1.15, 4.2, z - Math.sin(a) * 1.15);
+        bn2.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+        S.add(bn2);
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 512;
+    cv.height = 128;
+    const g = cv.getContext('2d');
+    g.font = 'bold 54px Georgia';
+    g.textAlign = 'center';
+    g.lineWidth = 8;
+    g.strokeStyle = '#000';
+    g.strokeText('⚔ THE PIT ⚔', 256, 62);
+    g.fillStyle = '#ff6b6b';
+    g.fillText('⚔ THE PIT ⚔', 256, 62);
+    g.font = 'bold 30px Georgia';
+    g.strokeText('PvP arena — enter at your own risk', 256, 108);
+    g.fillStyle = '#ffe0a0';
+    g.fillText('PvP arena — enter at your own risk', 256, 108);
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+    sign.scale.set(15, 3.75, 1);
+    sign.position.set(ARENA.x - .79 * 35, 9, ARENA.z - .61 * 35);
+    S.add(sign);
+})();
 
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -646,6 +763,8 @@ function pt(zi, minD) {
             const a = rnd(0, 6.283), d = rnd(minD, R0 - 2);
             x = Math.cos(a) * d;
             z = Math.sin(a) * d;
+            if (Math.hypot(x - ARENA.x, z - ARENA.z) < ARENA.R + 6)
+                continue;
         }
         else {
             x = rnd(-WORLD + 6, WORLD - 6);
@@ -866,11 +985,18 @@ flEl.style.cssText = 'position:fixed;inset:0;background:#dfe8ff;opacity:0;pointe
 document.body.appendChild(flEl);
 let zoneNow = 0, zoneSeen = new Set([0]), zoneT = 0, flashT = 8;
 function zoneTick(dt, t) {
-    const w = G.on ? [1, 0, 0, 0, 0] : zoneW(P.pos.x, P.pos.z, 16);
+    const w = G.on || DG.on ? [1, 0, 0, 0, 0] : zoneW(P.pos.x, P.pos.z, 16);
     tmpC.setRGB(0, 0, 0);
     let fn = 0, ff = 0, hi = 0, si = 0;
     w.forEach((v, k) => { if (!v)
         return; const c = SKYC[k]; tmpC.r += c.r * v; tmpC.g += c.g * v; tmpC.b += c.b * v; fn += ZONES[k].fn * v; ff += ZONES[k].ff * v; hi += ZONES[k].hi * v; si += ZONES[k].si * v; });
+    if (DG.on) {
+        tmpC.setHex(0x0b0810);
+        fn = 6;
+        ff = 70;
+        hi = .5;
+        si = .2;
+    }
     const a = Math.min(1, dt * 1.5);
     S.background.lerp(tmpC, a);
     S.fog.color.copy(S.background);
@@ -889,7 +1015,7 @@ function zoneTick(dt, t) {
                 setTimeout(() => { flEl.style.opacity = .4; setTimeout(() => { flEl.style.opacity = 0; }, 80); }, 220);
         }
     }
-    if (G.on || DU)
+    if (G.on || DU || DG.on)
         return;
     const z = zoneAt(P.pos.x, P.pos.z);
     if (z !== zoneNow) {
@@ -924,6 +1050,58 @@ const mark = add(new THREE.Mesh(new THREE.OctahedronGeometry(.4), new THREE.Mesh
 npc.position.set(0, 0, 5);
 S.add(npc);
 // hero
+// ===== Rogue: two ornate daggers =====
+function mkDagger() {
+    const g = new THREE.Group(), L = c => new THREE.MeshLambertMaterial(c), B = c => new THREE.MeshBasicMaterial({ color: c });
+    const steel = L({ color: 0xe6edf5, emissive: 0x12303a }), dark = L({ color: 0x9aa8b8, emissive: 0x0a1a22 }), gold = L({ color: 0xe8b84a, emissive: 0x3a2a08 }), leather = L({ color: 0x2a1a22 }), gem = B(0xb05aff), glow = B(0x66ffcc);
+    const sh = new THREE.Shape();
+    sh.moveTo(-.075, 0);
+    sh.lineTo(-.085, .5);
+    sh.quadraticCurveTo(-.06, .85, 0, 1.0);
+    sh.quadraticCurveTo(.06, .85, .085, .5);
+    sh.lineTo(.075, 0);
+    sh.lineTo(-.075, 0);
+    const blade = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: .03, bevelEnabled: true, bevelThickness: .012, bevelSize: .012, bevelSegments: 1 }), steel);
+    blade.position.set(0, .18, -.015);
+    g.add(blade);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.022, .62, .05), dark), 0, .55, 0, g);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.012, .5, .052), glow), 0, .56, 0, g);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.4, .07, .1), gold), 0, .17, 0, g);
+    [-1, 1].forEach(s => { add(new THREE.Mesh(new THREE.ConeGeometry(.045, .16, 5), gold), s * .22, .21, 0, g).rotation.z = -s * .6; });
+    add(new THREE.Mesh(new THREE.SphereGeometry(.045, 8, 6), gem), 0, .17, .055, g);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.045, .05, .3, 8), leather), 0, 0, 0, g);
+    for (let i = 0; i < 3; i++)
+        add(new THREE.Mesh(new THREE.TorusGeometry(.05, .01, 5, 10), gold), 0, -.08 + i * .08, 0, g).rotation.x = Math.PI / 2;
+    add(new THREE.Mesh(new THREE.SphereGeometry(.075, 10, 8), gold), 0, -.19, 0, g);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.045, 8, 6), gem), 0, -.19, .05, g);
+    return g;
+}
+function buildDaggers(g, w) {
+    w.visible = false;
+    const skin = new THREE.MeshLambertMaterial({ color: 0x2a1a22 }), armM = M(g.col);
+    const mkArm = sd => {
+        const piv = new THREE.Group(), inn = new THREE.Group();
+        inn.rotation.x = -.9;
+        piv.add(inn);
+        add(new THREE.Mesh(new THREE.BoxGeometry(.24, .85, .24), armM), 0, -.42, 0, inn);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.13, 8, 6), skin), 0, -.88, 0, inn);
+        const d = mkDagger();
+        d.scale.setScalar(.85);
+        d.position.set(0, -.88, .02);
+        d.rotation.x = 1.9;
+        d.rotation.z = -sd * .12;
+        inn.add(d);
+        return piv;
+    };
+    const ra = mkArm(1);
+    ra.position.set(.75, 1.7, 0);
+    g.add(ra);
+    g.arm.children.forEach(o => { o.visible = false; });
+    g.arm.add(mkArm(-1));
+    g.ra = ra;
+    g.w = { rotation: { set x(v) { ra.rotation.x = -v * .55; ra.position.z = -v * .08; if (v)
+                g.arm.rotation.x = v * -.4; }, get x() { return ra.rotation.x; } } };
+}
 function hero(col, cls) {
     const g = new THREE.Group();
     add(new THREE.Mesh(new THREE.CylinderGeometry(.5, .6, 1.5, 10), M(col)), 0, 1.1, 0, g);
@@ -946,8 +1124,6 @@ function hero(col, cls) {
     add(new THREE.Mesh(new THREE.BoxGeometry(.25, .9, .25), M(col)), 0, -.4, 0, arm);
     g.add(arm);
     g.arm = arm;
-    if (cls == 'rogue')
-        w.scale.setScalar(.55);
     if (cls == 'hunter') {
         w.children.forEach(o => o.visible = false);
         const bow = add(new THREE.Mesh(new THREE.TorusGeometry(.8, .05, 6, 12, Math.PI), M(0x6a4a1a)), 0, .5, 0, w);
@@ -959,6 +1135,8 @@ function hero(col, cls) {
     g.w = w;
     g.cls = cls;
     g.col = col;
+    if (cls == 'rogue')
+        buildDaggers(g, w);
     return g;
 }
 const MOBS = [['Wolf', 0x777777, 1, 1], ['Bandit', 0xa0522d, 1.2, 0], ['Ogre', 0x6b8e23, 1.9, 0], ['Wraith', 0x9b59b6, 1.5, 0],
@@ -1032,6 +1210,12 @@ function spawn() {
 function kill(m) {
     if (m.wb) {
         if (DU && DU.b === m) { m.hp = 1; duelEnd(true); return; }
+        if (m.pit) {
+            const xp = 10 * P.lvl + 20, gd = 5 * P.lvl + 5;
+            addXP(xp);
+            P.gold += gd;
+            say('<span style="color:#ff9a9a">PvP kill: ' + esc(m.name) + '! +' + xp + ' xp, +' + gd + ' gold</span>');
+        }
         return wbKill(m);
     }
     if (m.bot)
@@ -1070,7 +1254,10 @@ function kill(m) {
         P.mp = P.mmax;
         say('<b style="color:#ff6">LEVEL UP! You are level ' + P.lvl + '</b>');
     }
-    setTimeout(spawn, 6000);
+    if (m.dg)
+        dgKilled(m);
+    else
+        setTimeout(spawn, 6000);
 }
 const xpN = () => Math.round(30 * Math.pow(P.lvl, 1.5));
 function shot(col, d, fn, sz, tgt) { const b = new THREE.Mesh(new THREE.SphereGeometry(sz || .35, 8, 8), new THREE.MeshBasicMaterial({ color: col })); b.position.copy(P.pos); b.position.y += 2; S.add(b); bolts.push({ b, m: tgt || P.t, d, fn, c: col }); }
@@ -1398,6 +1585,8 @@ function foeHit(t, d, src) { if (G.cd > 0 || t.dead)
 }
 else if (t.mn)
     mnHurt(t, d);
+else if (t.wb)
+    wbPitHurt(t, d, src);
 else {
     t.hp -= d;
     float(t.pos, '-' + d, '#f77');
@@ -1407,7 +1596,7 @@ else {
 function botKill(b) { if (b.dead)
     return; const i = mobs.indexOf(b); if (i >= 0)
     mobs.splice(i, 1); b.dead = true; b.rs = 8; if (P.t === b)
-    P.t = null; dying.push({ m: b.mesh, t: 0 }); b.bgp.visible = false; burst(b.pos, 0xcc2222, 14); if (G.mode == 'bg' && !G.over)
+    P.t = null; dying.push({ m: b.mesh, t: 0, y0: b.pos.y }); b.bgp.visible = false; burst(b.pos, 0xcc2222, 14); if (G.mode == 'bg' && !G.over)
     G.sc[1 - b.team] += 5; say(b.name + ' was defeated!'); }
 function respawnBot(b) { const c = G.c; b.hp = b.max; b.dead = false; b.pos.set(c.x + (b.team ? 80 : -80), 0, c.z + (b.id - 2) * 4); b.mesh.scale.setScalar(1); b.mesh.rotation.set(0, b.team ? -Math.PI / 2 : Math.PI / 2, 0); S.add(b.mesh); if (!b.ally)
     mobs.push(b); b.bgp.visible = true; b.cd = 1; }
@@ -1489,6 +1678,8 @@ function pvpPlayerDown() { if (P.dead)
     return; P.dead = true; P.rs = 8; P.hp = 0; P.t = null; dismount(); P.cast = null; P.mesh.visible = false; burst(P.pos, 0xcc2222, 16); if (G.mode == 'bg' && !G.over)
     G.sc[1] += 5; bn(G.mode == 'bg' ? 'You died — respawning in 8s' : 'You were eliminated!', 2500); }
 function startMatch(mode) {
+    if (DG.on)
+        return say('Leave the dungeon first.');
     cancelDuel(true);
     dismissMinions();
     cancelGround(true);
@@ -1621,16 +1812,16 @@ function wbLabelDraw(b) {
     g.textAlign = 'center';
     g.lineWidth = 5;
     g.strokeStyle = '#000';
-    const s = b.name + '  Lv ' + b.lvl + (b.role == 'town' ? '  ⚔' : '');
+    const s = b.name + '  Lv ' + b.lvl + (b.role == 'town' || b.pit ? '  ⚔' : '');
     g.strokeText(s, 128, 26);
-    g.fillStyle = b.role == 'town' ? '#ffe48a' : '#9fd8ff';
+    g.fillStyle = b.pit ? '#ff7777' : b.role == 'town' ? '#ffe48a' : '#9fd8ff';
     g.fillText(s, 128, 26);
     g.fillStyle = 'rgba(0,0,0,.75)';
     g.fillRect(48, 36, 160, 12);
     g.fillStyle = pct > .5 ? '#3c3' : pct > .25 ? '#ec3' : '#e33';
     g.fillRect(49, 37, 158 * pct, 10);
     b.lt.needsUpdate = true;
-    b.lk = b.lvl + ':' + Math.round(pct * 20);
+    b.lk = b.lvl + ':' + Math.round(pct * 20) + (b.pit ? 'p' : '');
 }
 function mkWB(cls, role, x, z, name, lvl) {
     const k = CL[cls], mesh = hero(k.col, cls), spc = (cls == 'warrior' || cls == 'paladin') ? applySpec(mesh, Math.random() < .5 ? 'melee' : 'tank') : 0;
@@ -1673,7 +1864,7 @@ function wbXP(b, x) {
     while (b.xp >= Math.round(30 * Math.pow(b.lvl, 1.5))) {
         b.xp -= Math.round(30 * Math.pow(b.lvl, 1.5));
         b.lvl++;
-        b.max = CL[b.cls].hp + 20 * (b.lvl - 1);
+        b.max = CL[b.cls].hp + 20 * ((b.pit ? PVPL : b.lvl) - 1);
         b.hp = b.max;
         burst(b.pos, 0xffee55, 24, 2);
         float(b.pos, '⬆ Lv ' + b.lvl, '#ffe066');
@@ -1687,10 +1878,13 @@ function wbHurt(b, d) { if (b.dead)
 function wbKill(b) {
     if (b.dead)
         return;
+    if (b.pit)
+        pitFlag(b, false);
+    b.pitMode = null;
     b.dead = true;
     b.rs = 12;
     b.tgt = null;
-    dying.push({ m: b.mesh, t: 0 });
+    dying.push({ m: b.mesh, t: 0, y0: b.pos.y });
     b.label.visible = false;
     burst(b.pos, 0xcc2222, 12);
     const i = mobs.indexOf(b);
@@ -1825,6 +2019,20 @@ function wbAI(b, dt, t) {
             face(P);
         return;
     }
+    // --- the Pit: sometimes dive in and brawl ---
+    if (b.pitMode) {
+        pitAI(b, dt, go, face, sp);
+        return;
+    }
+    b.pitCd = (b.pitCd === undefined ? rnd(20, 60) : b.pitCd) - dt;
+    if (b.pitCd <= 0 && !b.tgt && b.hp > b.max * .7) {
+        b.pitCd = rnd(45, 110);
+        if (Math.random() < .6) {
+            b.pitMode = 'go';
+            b.pitT = rnd(25, 45);
+            b.pitIdle = 0;
+        }
+    }
     // --- adventurers: hunt monsters in the starting zone and level up ---
     if (b.hp < b.max * .35 && !inTown) {
         b.tgt = null;
@@ -1877,6 +2085,7 @@ function wbTick(dt, t) {
         wbAI(b, dt, t);
         b.pos.x = Math.max(-WORLD + 3, Math.min(WORLD - 3, b.pos.x));
         b.pos.z = Math.max(-WORLD + 3, Math.min(WORLD - 3, b.pos.z));
+        b.pos.y = groundH(b.pos.x, b.pos.z);
         const sw = b.mv ? Math.sin(t * 12 + b.id) * .8 : 0;
         b.mesh.legs[0].rotation.x = sw;
         b.mesh.legs[1].rotation.x = -sw;
@@ -1884,7 +2093,7 @@ function wbTick(dt, t) {
         b.mesh.w.rotation.x = b.sw > 0 ? -Math.sin(b.sw / .3 * 3.14) * 1.8 : 0;
         b.label.position.set(b.pos.x, 3.7, b.pos.z);
         b.label.visible = d3(b, P) < 70;
-        if (b.lk !== b.lvl + ':' + Math.round(Math.max(0, b.hp / b.max) * 20))
+        if (b.lk !== b.lvl + ':' + Math.round(Math.max(0, b.hp / b.max) * 20) + (b.pit ? 'p' : ''))
             wbLabelDraw(b);
     });
     if (DU && !DU.over) {
@@ -1909,11 +2118,11 @@ function wbTick(dt, t) {
 }
 // ----- Duel -----
 function startDuel(b) {
-    if (!b || DU || G.on || P.dead)
+    if (!b || DU || G.on || P.dead || DG.on)
         return;
     if (Math.hypot(P.pos.x, P.pos.z) > TOWN + 6 || Math.hypot(b.pos.x, b.pos.z) > TOWN + 6)
         return say('Duels are fought in town.');
-    if (b.dead || b.tgt)
+    if (b.dead || b.tgt || b.pitMode)
         return say(b.name + ' is busy.');
     dismount();
     P.cast = null;
@@ -2007,7 +2216,7 @@ function renderBP() {
     if (!b)
         return;
     const inT = Math.hypot(P.pos.x, P.pos.z) <= TOWN + 6 && Math.hypot(b.pos.x, b.pos.z) <= TOWN + 6, can = !DU && !G.on && !b.tgt && !b.dead;
-    const st = DU && DU.b === b ? 'Dueling you' : b.tgt ? 'Fighting monsters' : b.role == 'town' ? 'Resting in town' : 'Adventuring';
+    const st = DU && DU.b === b ? 'Dueling you' : b.pit ? 'Fighting in the Pit (PvP)' : b.tgt ? 'Fighting monsters' : b.role == 'town' ? 'Resting in town' : 'Adventuring';
     const hint = DU ? '' : !inT ? 'Duels are fought in town' : !can ? 'Busy right now' : '';
     const s = `<b style="color:var(--gold)">${b.name}</b> · Lv ${b.lvl} ${b.cls[0].toUpperCase() + b.cls.slice(1)}<br><small>${st}</small><div class="bar"><i style="background:#c33;width:${Math.round(Math.max(0, b.hp / b.max) * 20) * 5}%"></i></div><div style="margin-top:6px">` + (can && inT ? `<button onclick="startDuel(selB)" style="padding:4px 12px;font-size:13px;margin:0 4px">⚔️ Duel</button><br><small style="opacity:.7">Levels don't count in duels</small>` : `<small style="opacity:.8">${hint}</small>`) + `<button onclick="closeBP()" style="padding:4px 10px;font-size:13px;margin:0 4px">✕</button></div>`;
     if (p.dataset.s !== s) {
@@ -2674,7 +2883,7 @@ function mnDie(b, quiet) {
         S.remove(b.bgp);
     }
     else
-        dying.push({ m: b.mesh, t: 0 });
+        dying.push({ m: b.mesh, t: 0, y0: b.pos.y });
     burst(b.pos, quiet ? 0x9a44ff : 0xcc2222, 8);
 }
 function mnHurt(b, d) { if (b.dead)
@@ -2696,7 +2905,7 @@ function mnHitMob(m, d, mn) {
     if (m.hp <= 0)
         kill(m);
 }
-function mnFoes() { return G.on ? mobs.filter(m => m.bot) : DU ? [DU.b] : mobs.filter(m => !m.bot && !m.wb); }
+function mnFoes() { return G.on ? mobs.filter(m => m.bot) : DU ? [DU.b] : mobs.filter(m => (!m.bot && !m.wb) || (P.pit && m.wb && m.pit)); }
 function mnTick(dt, t) {
     mins = mins.filter(m => { if (m.gone) {
         S.remove(m.bgp);
@@ -2766,7 +2975,7 @@ function mnTick(dt, t) {
         m.mesh.legs[1].rotation.x = -sw;
         if (m.mesh.wings)
             m.mesh.wings.forEach((w, k) => { w.rotation.z = (k ? -1 : 1) * Math.sin(t * 16 + m.idx) * .6; });
-        m.pos.y = m.mesh.wings ? .25 + Math.sin(t * 6 + m.idx) * .12 : (m.mv ? Math.abs(Math.sin(t * 14 + m.idx)) * .12 : 0);
+        m.pos.y = groundH(m.pos.x, m.pos.z) + (m.mesh.wings ? .25 + Math.sin(t * 6 + m.idx) * .12 : (m.mv ? Math.abs(Math.sin(t * 14 + m.idx)) * .12 : 0));
     });
 }
 // ----- ground targeting + Volcano -----
@@ -2904,6 +3113,548 @@ function warTick(dt, t) {
     });
     mnTick(dt, t);
 }
+// ===== The Pit: PvP flag, bots that dive in =====
+function pitFlag(b, on) {
+    if (on === !!b.pit)
+        return;
+    const r = b.hp / b.max;
+    b.pit = on;
+    b.max = CL[b.cls].hp + 20 * ((on ? PVPL : b.lvl) - 1);
+    b.hp = Math.max(1, Math.round(r * b.max));
+    if (on) {
+        if (mobs.indexOf(b) < 0)
+            mobs.push(b);
+    }
+    else {
+        const i = mobs.indexOf(b);
+        if (i >= 0 && !(DU && DU.b === b))
+            mobs.splice(i, 1);
+        b.aggro = false;
+        b.dot = null;
+        b.slow = 0;
+        b.stun = 0;
+        if (P && P.t === b)
+            P.t = null;
+    }
+    wbLabelDraw(b);
+}
+function wbPitHurt(t, d, src) {
+    if (t.dead)
+        return;
+    t.hp -= d;
+    float(t.pos, '-' + d, '#f77');
+    if (t.hp <= 0) {
+        if (src && src.wb)
+            wbXP(src, 20 + 3 * t.lvl);
+        wbKill(t);
+    }
+}
+function pitFoes(b) {
+    const a = wbots.filter(o => o !== b && o.pit && !o.dead && groundH(o.pos.x, o.pos.z) < -.6);
+    if (P.pit && !P.dead && groundH(P.pos.x, P.pos.z) < -.6)
+        a.push(P);
+    return a;
+}
+function pitAI(b, dt, go, face, sp) {
+    const inP = groundH(b.pos.x, b.pos.z) < -1.2;
+    if (b.pitMode == 'go') {
+        if (inP) {
+            b.pitMode = 'fight';
+            pitFlag(b, true);
+            b.pitIdle = 0;
+        }
+        else
+            go(ARENA.x, ARENA.z, sp);
+        return;
+    }
+    if (b.pitMode == 'fight') {
+        b.pitT -= dt;
+        if (b.hp < b.max * .35 || b.pitT <= 0 || !inP && groundH(b.pos.x, b.pos.z) > -.3) {
+            b.pitMode = 'leave';
+            return;
+        }
+        const foes = pitFoes(b);
+        let tg = null, bd = 1e9;
+        foes.forEach(f => { const d = d3(f, b); if (d < bd) {
+            bd = d;
+            tg = f;
+        } });
+        if (!tg) {
+            b.pitIdle += dt;
+            if (d3({ pos: { x: ARENA.x, z: ARENA.z } }, b) > 6)
+                go(ARENA.x, ARENA.z, sp * .6);
+            if (b.pitIdle > 14)
+                b.pitMode = 'leave';
+            return;
+        }
+        b.pitIdle = 0;
+        const R = b.rng ? 15 : 3;
+        if (bd > R)
+            go(tg.pos.x, tg.pos.z, sp);
+        else {
+            if (b.rng && bd < 6)
+                go(2 * b.pos.x - tg.pos.x, 2 * b.pos.z - tg.pos.z, sp * .8);
+            else
+                face(tg);
+            if (b.cd <= 0) {
+                if (b.cls == 'priest' && b.hp < b.max * .45 && b.hc <= 0) {
+                    b.hp = Math.min(b.max, b.hp + Math.round(b.max * .25));
+                    b.hc = 8;
+                    b.cd = 2;
+                    float(b.pos, '+heal', '#6f6');
+                    burst(b.pos, 0x66ff88, 8, 1.2);
+                }
+                else
+                    wbSwing(b, tg, Math.round((10 + PVPL * 3) * b.k * rnd(.85, 1.15) * (tg === P ? G.diff : 1)), false);
+            }
+        }
+        return;
+    }
+    if (b.pitMode == 'leave') {
+        const dx = b.pos.x - ARENA.x, dz = b.pos.z - ARENA.z, l = Math.hypot(dx, dz) || 1;
+        go(ARENA.x + dx / l * (ARENA.R + 8), ARENA.z + dz / l * (ARENA.R + 8), sp);
+        if (groundH(b.pos.x, b.pos.z) > -.3) {
+            pitFlag(b, false);
+            b.pitMode = null;
+        }
+    }
+}
+function pitOff(silent) {
+    P.pit = false;
+    if (!G.on && !DU)
+        pvpStats(false);
+    $('pvpf').style.display = 'none';
+    $('vig').style.opacity = 0;
+    if (!silent)
+        say('You are no longer flagged for PvP.');
+}
+function pitReset() { if (P)
+    P.pit = false; $('pvpf').style.display = 'none'; $('vig').style.opacity = 0; }
+function pitTick(dt, t) {
+    pitFlames.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i) * .25; });
+    if (G.on || DU) {
+        if (P.pit)
+            pitOff(true);
+        return;
+    }
+    const inside = groundH(P.pos.x, P.pos.z) < -1.2;
+    if (inside) {
+        P.pitT = 6;
+        if (!P.pit) {
+            P.pit = true;
+            pvpStats(true);
+            bn('⚔️ PvP zone — you are hostile!', 2400);
+            say('<span style="color:#ff7a7a">You descend into The Pit. You are flagged for PvP — fight at equal power!</span>');
+        }
+    }
+    else if (P.pit) {
+        P.pitT -= dt;
+        if (P.pitT <= 0)
+            pitOff(false);
+    }
+    $('pvpf').style.display = P.pit ? 'block' : 'none';
+    $('vig').style.opacity = P.pit ? .55 + Math.sin(t * 3) * .15 : 0;
+}
+// ===== Dungeon: The Crypt of Ashes (3 bosses) =====
+const DG = { on: false, x: 0, z: 1200, name: 'Crypt of Ashes', left: 0, total: 0, bossDown: new Set(), cleared: false, t: 0, ret: null, px: 0, pz: 0 };
+const DGR = [[0, 14], [74, 24], [158, 24], [246, 28]], DGC = [[10, 54], [94, 138], [178, 222]];
+const DT0 = MOBS.length;
+MOBS.push(['Skeleton Warrior', 0xd8d2b8, 1.15, 0], ['Crypt Ghoul', 0x7a8a5a, 1.3, 1], ['Cultist', 0x5a2a6a, 1.2, 0], ['Bone Brute', 0xc9c0a0, 1.9, 0], ['Shadow Wraith', 0x4a3a7a, 1.5, 0], ['Gravewarden Mortuk', 0x9a9a8a, 3.0, 0], ['Banshee Queen Sylvaine', 0x8a5ad0, 2.3, 0], ['Azrak the Ashen King', 0xc43a1a, 3.6, 0]);
+const DGT = { skel: DT0, ghoul: DT0 + 1, cult: DT0 + 2, brute: DT0 + 3, wraith: DT0 + 4 };
+const DG_BOSSES = [
+    { id: 1, ty: DT0 + 5, name: 'Gravewarden Mortuk', lvl: 10, x: 0, z: 74, hpm: 12, dm: 1.6, spd: .85, rng: 4.6, acd: 1.5 },
+    { id: 2, ty: DT0 + 6, name: 'Banshee Queen Sylvaine', lvl: 11, x: 0, z: 158, hpm: 12, dm: 1.4, spd: 1, rng: 3.6, acd: 1.2 },
+    { id: 3, ty: DT0 + 7, name: 'Azrak the Ashen King', lvl: 13, x: 0, z: 258, hpm: 16, dm: 1.6, spd: .9, rng: 5.4, acd: 1.4 }
+];
+const DG_PLAN = [
+    { ri: 1, cz: 74, lvl: 7, types: [DGT.skel, DGT.ghoul], n: 14, bx: 0, bz: 74 },
+    { ri: 2, cz: 158, lvl: 8, types: [DGT.cult, DGT.wraith], n: 16, bx: 0, bz: 158 },
+    { ri: 3, cz: 246, lvl: 9, types: [DGT.brute, DGT.wraith, DGT.skel], n: 12, bx: 0, bz: 258 }
+];
+let dgG = null, dgBlock = [], dgFlames = [], dgPortals = [], dgZones = [], dgLight = null, dgExit = null;
+function dgWalk(x, z) {
+    const rx = x - DG.x, rz = z - DG.z;
+    for (const [cz, r] of DGR)
+        if (Math.hypot(rx, rz - cz) < r - 1.2)
+            return true;
+    for (const [a, b] of DGC)
+        if (Math.abs(rx) < 3.2 && rz > a && rz < b)
+            return true;
+    return false;
+}
+function dgClamp() {
+    const ox = DG.px, oz = DG.pz;
+    if (!dgWalk(P.pos.x, P.pos.z)) {
+        if (dgWalk(P.pos.x, oz))
+            P.pos.z = oz;
+        else if (dgWalk(ox, P.pos.z))
+            P.pos.x = ox;
+        else {
+            P.pos.x = ox;
+            P.pos.z = oz;
+        }
+    }
+    DG.px = P.pos.x;
+    DG.pz = P.pos.z;
+}
+function buildDungeon() {
+    if (dgG)
+        return;
+    dgG = new THREE.Group();
+    dgG.position.set(DG.x, 0, DG.z);
+    dgG.visible = false;
+    S.add(dgG);
+    const stoneM = new THREE.MeshLambertMaterial({ map: stoneT, color: 0x6a6480 }), floorM = new THREE.MeshLambertMaterial({ map: stoneT, color: 0x4a465a }), bone = new THREE.MeshLambertMaterial({ color: 0xe0dac0 });
+    const box = (w, h, d, x, y, z, mat, ry) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); if (ry)
+        m.rotation.y = ry; dgG.add(m); dgBlock.push(m); return m; };
+    const flat = (g, x, y, z, mat) => { const m = new THREE.Mesh(g, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); dgG.add(m); return m; };
+    const torch = (x, z) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(.18, .22, 2.6, 6), stoneM); p.position.set(x, 1.3, z); dgG.add(p); const f = new THREE.Mesh(new THREE.ConeGeometry(.4, 1.1, 7), new THREE.MeshBasicMaterial({ color: 0xff9a2a })); f.position.set(x, 3.1, z); dgG.add(f); dgFlames.push(f); };
+    DGR.forEach(([cz, r], i) => {
+        flat(new THREE.CircleGeometry(r, 48), 0, .02, cz, floorM);
+        const N = 40, openS = i > 0, openN = i < 3;
+        for (let k = 0; k < N; k++) {
+            const a = k / N * Math.PI * 2, sx = Math.cos(a) * r, sz = Math.sin(a) * r;
+            if (Math.abs(sx) < 5.4 && ((sz < 0 && openS) || (sz > 0 && openN)))
+                continue;
+            box(2 * Math.PI * r / N * 1.04, 10, 1.6, Math.cos(a) * (r + .8), 5, cz + Math.sin(a) * (r + .8), stoneM, Math.atan2(-Math.cos(a), -Math.sin(a)));
+            if (k % 4 == 0)
+                torch(Math.cos(a) * (r - 1.2), cz + Math.sin(a) * (r - 1.2));
+        }
+        for (let k = 0; k < 14; k++) {
+            const a = rnd(0, 6.28), rr = rnd(3, r - 3), b = new THREE.Mesh(k % 3 ? new THREE.SphereGeometry(rnd(.15, .3), 6, 5) : new THREE.BoxGeometry(.7, .12, .16), bone);
+            b.position.set(Math.cos(a) * rr, .15, cz + Math.sin(a) * rr);
+            b.rotation.y = rnd(0, 3);
+            dgG.add(b);
+        }
+    });
+    DGC.forEach(([a, b]) => {
+        flat(new THREE.PlaneGeometry(8, b - a), 0, .02, (a + b) / 2, floorM);
+        [-1, 1].forEach(s => box(1.2, 10, b - a, s * 4.4, 5, (a + b) / 2, stoneM));
+        for (let z = a + 6; z < b - 4; z += 10)
+            [-1, 1].forEach(s => torch(s * 3.4, z));
+    });
+    // portal to leave
+    const mkPortal = (x, z, col) => { const g = new THREE.Group(); g.position.set(x, 0, z); const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2, .28, 8, 32), new THREE.MeshBasicMaterial({ color: col })); ring.position.y = 2.8; g.add(ring); const d = new THREE.Mesh(new THREE.CircleGeometry(2.1, 32), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .45, side: 2 })); d.position.y = 2.8; g.add(d); dgG.add(g); const o = { g, d, x, z }; dgPortals.push(o); return o; };
+    mkPortal(0, -10, 0x4a9cff);
+    dgExit = mkPortal(0, 236, 0x66ffaa);
+    dgExit.g.visible = false;
+    // boss area decor
+    const rune = (z, col, r) => flat(new THREE.RingGeometry(r - .4, r, 48), 0, .06, z, new THREE.MeshBasicMaterial({ color: col, side: 2, transparent: true, opacity: .8 }));
+    rune(74, 0xd8d0a0, 9);
+    rune(74, 0xd8d0a0, 5);
+    rune(158, 0xb06aff, 10);
+    rune(158, 0xb06aff, 6);
+    for (let k = 0; k < 6; k++) {
+        const a = k / 6 * Math.PI * 2 + .3;
+        box(1.6, 1, 3, Math.cos(a) * 18, .5, 74 + Math.sin(a) * 18, stoneM, a);
+    }
+    for (let k = 0; k < 12; k++) {
+        const a = k / 12 * Math.PI * 2, c = new THREE.Mesh(new THREE.CylinderGeometry(.12, .12, 1.2, 6), bone), f = new THREE.Mesh(new THREE.ConeGeometry(.2, .55, 6), new THREE.MeshBasicMaterial({ color: 0xc58aff }));
+        c.position.set(Math.cos(a) * 12, .6, 158 + Math.sin(a) * 12);
+        f.position.set(Math.cos(a) * 12, 1.5, 158 + Math.sin(a) * 12);
+        dgG.add(c);
+        dgG.add(f);
+        dgFlames.push(f);
+    }
+    const lavaM = new THREE.MeshLambertMaterial({ map: mtex('lava', 0x8a1a1a), emissive: 0x7a2a08 });
+    flat(new THREE.CircleGeometry(15, 40), 0, .05, 246, lavaM);
+    rune(246, 0xff7a1a, 15);
+    box(8, 1.4, 5, 0, .7, 270, stoneM);
+    box(5, 1.4, 4, 0, 2.1, 271.5, stoneM);
+    box(5, 6, 1.2, 0, 4.4, 273.5, stoneM);
+    [-8, 8].forEach(x => { const br = new THREE.Mesh(new THREE.CylinderGeometry(.9, .6, 2, 8), stoneM); br.position.set(x, 1, 266); dgG.add(br); const f = new THREE.Mesh(new THREE.ConeGeometry(1, 2.6, 8), new THREE.MeshBasicMaterial({ color: 0xff6a1a })); f.position.set(x, 3.2, 266); dgG.add(f); dgFlames.push(f); });
+    dgLight = new THREE.PointLight(0xffb870, 1.7, 42);
+    dgLight.visible = false;
+    S.add(dgLight);
+    dgG.updateMatrixWorld(true);
+}
+function decorBoss(m) {
+    const g = m.mesh, id = m.boss, s = MOBS[m.ty][2], C = c => new THREE.MeshLambertMaterial({ color: c, emissive: 0x220a04 });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(1.5 * s, 14, 10), new THREE.MeshBasicMaterial({ color: id == 1 ? 0x77ff88 : id == 2 ? 0xb06aff : 0xff6a1a, transparent: true, opacity: .13 }));
+    aura.position.y = .9 * s;
+    g.add(aura);
+    [-1, 1].forEach(sd => {
+        if (id == 3) {
+            const h = new THREE.Mesh(new THREE.ConeGeometry(.22 * s, .9 * s, 6), C(0x2a1a14));
+            h.position.set(sd * .35 * s, 2.35 * s, .5 * s);
+            h.rotation.z = -sd * .45;
+            g.add(h);
+        }
+        if (id == 1) {
+            const h = new THREE.Mesh(new THREE.ConeGeometry(.18 * s, .7 * s, 5), C(0xe0dac0));
+            h.position.set(sd * .85 * s, 1.7 * s, 0);
+            h.rotation.z = -sd * .9;
+            g.add(h);
+        }
+    });
+    if (id == 3)
+        for (let i = 0; i < 5; i++) {
+            const a = i / 5 * Math.PI * 2, f = new THREE.Mesh(new THREE.ConeGeometry(.12 * s, .5 * s, 5), new THREE.MeshBasicMaterial({ color: 0xffb02a }));
+            f.position.set(Math.cos(a) * .35 * s, 2.15 * s, .5 * s + Math.sin(a) * .35 * s);
+            g.add(f);
+        }
+    if (id == 2)
+        g.traverse(o => { if (o.material && o.material.isMeshLambertMaterial) {
+            o.material.transparent = true;
+            o.material.opacity = .72;
+        } });
+}
+function mkDgMob(ty, x, z, lvl, o) {
+    const mesh = mobMesh(ty);
+    mesh.position.set(x, 0, z);
+    S.add(mesh);
+    mesh.traverse(q => { if (q.isMesh && q.material.isMeshLambertMaterial)
+        q.castShadow = true; });
+    const hp = Math.round((30 + lvl * 22) * (o.hpm || 1.4));
+    const m = { mesh, pos: mesh.position, hx: x, hz: z, lvl, ty, hp, max: hp, cd: rnd(0, 1), slow: 0, aggro: !!o.aggro, dg: 1, dm: o.dm || 1.25, spd: o.spd || 1 };
+    if (o.boss) {
+        m.boss = o.boss;
+        m.name = o.name;
+        m.rng = o.rng;
+        m.acd = o.acd;
+        decorBoss(m);
+    }
+    mobs.push(m);
+    DG.left++;
+    DG.total++;
+    return m;
+}
+function spawnDungeon() {
+    DG.left = 0;
+    DG.total = 0;
+    DG_PLAN.forEach(pl => {
+        for (let i = 0; i < pl.n; i++) {
+            let x, z, k = 0;
+            do {
+                const a = rnd(0, 6.283), r = rnd(5, DGR[pl.ri][1] - 5);
+                x = Math.cos(a) * r;
+                z = pl.cz + Math.sin(a) * r;
+                k++;
+            } while (k < 25 && Math.hypot(x - pl.bx, z - pl.bz) < 10);
+            mkDgMob(pick(pl.types), DG.x + x, DG.z + z, pl.lvl, {});
+        }
+    });
+    [[0, DGT.skel, 7], [1, DGT.cult, 8], [2, DGT.brute, 9]].forEach(([ci, ty, lvl]) => {
+        const [a, b] = DGC[ci];
+        for (let i = 0; i < 4; i++)
+            mkDgMob(ty, DG.x + rnd(-2, 2), DG.z + a + 6 + (b - a - 12) * (i + .5) / 4, lvl, {});
+    });
+    DG_BOSSES.forEach(b => mkDgMob(b.ty, DG.x + b.x, DG.z + b.z, b.lvl, { boss: b.id, name: b.name, hpm: b.hpm, dm: b.dm, spd: b.spd, rng: b.rng, acd: b.acd }));
+}
+function enterDungeon() {
+    if (DG.on)
+        return;
+    if (G.on || DU)
+        return say('Finish your PvP match first.');
+    if (P.pit)
+        return say('Leave The Pit first.');
+    ['dgw', 'pv', 'mb', 'adm', 'pause', 'map'].forEach(i => $(i).style.display = 'none');
+    mapOpen = false;
+    paused = false;
+    dismount();
+    P.cast = null;
+    endChan();
+    cancelGround(true);
+    buildDungeon();
+    DG.ret = { x: P.pos.x, z: P.pos.z };
+    DG.on = true;
+    DG.t = 0;
+    DG.cleared = false;
+    DG.bossDown = new Set();
+    if (dgExit)
+        dgExit.g.visible = false;
+    dgG.visible = true;
+    dgLight.visible = true;
+    P.pos.set(DG.x, 0, DG.z - 4);
+    P.by = 0;
+    P.jy = 0;
+    DG.px = P.pos.x;
+    DG.pz = P.pos.z;
+    yaw = Math.PI;
+    P.t = null;
+    spawnDungeon();
+    bn('🏰 ' + DG.name, 2800);
+    say('<span style="color:#c9a0ff">You enter the Crypt of Ashes. 3 bosses and ' + (DG.total - 3) + ' monsters lurk inside. The blue portal behind you leads out.</span>');
+}
+function leaveDungeon(quiet) {
+    if (!DG.on)
+        return;
+    mobs.filter(m => m.dg).forEach(m => S.remove(m.mesh));
+    mobs = mobs.filter(m => !m.dg);
+    dgZones.forEach(z => S.remove(z.g));
+    dgZones = [];
+    dgG.visible = false;
+    dgLight.visible = false;
+    DG.on = false;
+    if (P.t && mobs.indexOf(P.t) < 0)
+        P.t = null;
+    const r = DG.ret || { x: 0, z: -3 };
+    P.pos.set(r.x, 0, r.z);
+    P.by = 0;
+    P.jy = 0;
+    $('bossf').style.display = 'none';
+    $('dgp').style.display = 'none';
+    if (!quiet)
+        say('You leave the Crypt of Ashes.');
+}
+function dgZone(x, z, r, col, delay, dmgv, src, kind) {
+    const g = new THREE.Group(), ring = new THREE.Mesh(new THREE.RingGeometry(.94, 1, 48), new THREE.MeshBasicMaterial({ color: col, side: 2, transparent: true, opacity: .9 })), disc = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: col, side: 2, transparent: true, opacity: .2 }));
+    [ring, disc].forEach(o => { o.rotation.x = -Math.PI / 2; o.position.y = .14; g.add(o); });
+    g.position.set(x, 0, z);
+    g.scale.set(r, 1, r);
+    S.add(g);
+    dgZones.push({ g, disc, t: delay, max: delay, x, z, r, col, dmg: dmgv, src, kind });
+}
+function dgAdds(b, ty, n, lvl) {
+    for (let i = 0; i < n; i++)
+        mkDgMob(ty, b.pos.x + rnd(-7, 7), b.pos.z + rnd(-7, 7), lvl, { aggro: true });
+    burst(b.pos, 0x9a44ff, 20, 1.6);
+}
+function bossTick(b, dt, t) {
+    if (b.stun > 0)
+        return;
+    const eng = b.aggro || d3(b, P) < 24;
+    if (!eng)
+        return;
+    const f = b.hp / b.max, id = b.boss;
+    b.t1 = (b.t1 === undefined ? (id == 3 ? 4 : 5) : b.t1) - dt;
+    if (id == 1) {
+        if (b.t1 <= 0) {
+            b.t1 = 9;
+            dgZone(b.pos.x, b.pos.z, 8, 0xff5533, 1.4, 55, b, 'slam');
+        }
+        if (f < .5 && !b.p1) {
+            b.p1 = 1;
+            dgAdds(b, DGT.skel, 4, 9);
+            bn('Mortuk raises the fallen!', 2200);
+        }
+    }
+    else if (id == 2) {
+        if (b.t1 <= 0) {
+            b.t1 = 11;
+            dgZone(b.pos.x, b.pos.z, 15, 0xb06aff, 1.3, 48, b, 'wail');
+        }
+        if (f < .66 && !b.p1) {
+            b.p1 = 1;
+            dgAdds(b, DGT.wraith, 3, 10);
+            bn('Sylvaine calls the spirits!', 2200);
+        }
+        if (f < .33 && !b.p2) {
+            b.p2 = 1;
+            dgAdds(b, DGT.wraith, 3, 10);
+            bn('The spirits answer again!', 2200);
+        }
+        if (Math.random() < .3)
+            burst(b.pos, 0xb06aff, 1, .7, 1.8);
+    }
+    else {
+        if (b.t1 <= 0) {
+            b.t1 = 8;
+            const px = P.pos.x, pz = P.pos.z;
+            dgZone(px, pz, 5, 0xff7a1a, 1.7, 60, b, 'fire');
+            for (let k = 0; k < 2; k++)
+                dgZone(px + rnd(-9, 9), pz + rnd(-9, 9), 5, 0xff7a1a, 1.7, 60, b, 'fire');
+        }
+        if (f < .6 && !b.p1) {
+            b.p1 = 1;
+            dgAdds(b, DGT.brute, 4, 11);
+            bn('Azrak summons his guard!', 2200);
+        }
+        if (f < .25 && !b.p2) {
+            b.p2 = 1;
+            b.dm *= 1.4;
+            b.spd *= 1.25;
+            bn('🔥 Azrak is ENRAGED!', 2600);
+        }
+        if (Math.random() < .4)
+            burst(b.pos, 0xff7a1a, 1, 1.5, 3);
+    }
+}
+function dgKilled(m) {
+    DG.left = Math.max(0, DG.left - 1);
+    if (m.boss) {
+        DG.bossDown.add(m.boss);
+        const B = DG_BOSSES[m.boss - 1], xp = 80 * B.lvl + 150, gd = 40 * B.lvl;
+        addXP(xp);
+        P.gold += gd;
+        P.gear += m.boss == 3 ? 2 : 1;
+        burst(m.pos, 0xffd24a, 40, 2.4);
+        bn('☠ ' + B.name + ' defeated!', 3200);
+        say('<b style="color:#ffd24a">' + B.name + ' defeated! +' + xp + ' xp, +' + gd + ' gold</b>');
+        say('<span style="color:#c9f">★ Loot: Ember Blade +' + P.gear + ' (more damage!)</span>');
+        if (DG.bossDown.size == 3) {
+            DG.cleared = true;
+            addXP(300);
+            P.gold += 200;
+            if (dgExit)
+                dgExit.g.visible = true;
+            setTimeout(() => { if (DG.on)
+                bn('🏆 Dungeon Cleared!', 4500); }, 3300);
+            say('<b style="color:#6fff9a">The Crypt of Ashes is cleared! +300 xp, +200 gold. A green portal opens.</b>');
+        }
+    }
+}
+function dgTick(dt, t) {
+    if (!DG.on)
+        return;
+    DG.t += dt;
+    dgLight.position.set(P.pos.x, 4.5, P.pos.z);
+    dgFlames.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 12 + i * 1.7) * .25; });
+    dgPortals.forEach(p => { p.d.rotation.z += dt * 1.6; });
+    P.slowT = Math.max(0, (P.slowT || 0) - dt);
+    mobs.forEach(m => { if (m.boss)
+        bossTick(m, dt, t); });
+    dgZones = dgZones.filter(z => {
+        z.t -= dt;
+        z.disc.material.opacity = .12 + .38 * (1 - Math.max(0, z.t) / z.max);
+        if (z.t > 0)
+            return true;
+        if (Math.hypot(P.pos.x - z.x, P.pos.z - z.z) < z.r && !P.dead) {
+            foeHit(P, z.dmg, z.src);
+            if (z.kind == 'wail')
+                P.slowT = 3.5;
+        }
+        burst(new THREE.Vector3(z.x, 0, z.z), z.col, 22, 2, .2);
+        S.remove(z.g);
+        return false;
+    });
+    if (DG.t > 3)
+        dgPortals.forEach(p => { if (p.g.visible && DG.on && Math.hypot(P.pos.x - (DG.x + p.x), P.pos.z - (DG.z + p.z)) < 2.5)
+            leaveDungeon(); });
+    if (!DG.on)
+        return;
+    let bf = null;
+    mobs.forEach(m => { if (m.boss && (m.aggro || d3(m, P) < 28) && (!bf || d3(m, P) < d3(bf, P)))
+        bf = m; });
+    const el = $('bossf');
+    if (bf) {
+        const s = `<b style="color:#ff9a6a">${bf.name}</b> <small>Lv ${bf.lvl}</small><div class="bar" style="height:14px"><i style="background:#c0392b;width:${Math.max(0, bf.hp / bf.max * 100)}%"></i></div>`;
+        if (el.dataset.s !== s) {
+            el.dataset.s = s;
+            el.innerHTML = s;
+        }
+        el.style.display = 'block';
+    }
+    else
+        el.style.display = 'none';
+    const pn = $('dgp'), ps = '🏰 <b>' + DG.name + '</b><br>Bosses ' + DG.bossDown.size + '/3 · Monsters left ' + DG.left + (DG.cleared ? '<br><span style="color:#6fff9a">Cleared! Use the green portal.</span>' : '');
+    if (pn.dataset.s !== ps) {
+        pn.dataset.s = ps;
+        pn.innerHTML = ps;
+    }
+    pn.style.display = 'block';
+}
+function toggleDg() {
+    if (!running)
+        return;
+    const p = $('dgw');
+    p.style.display = p.style.display == 'flex' ? 'none' : 'flex';
+    renderDg();
+}
+function renderDg() {
+    const inD = DG.on, low = P && P.lvl < 6;
+    $('dgw').innerHTML = `<div class="mp" style="min-width:min(520px,92vw);text-align:center"><b style="color:var(--gold)">🏰 Dungeons</b><span onclick="toggleDg()" style="float:right;cursor:pointer">✕</span><div style="margin:12px 0;padding:12px;border:2px solid #7a5a22;border-radius:8px;background:radial-gradient(circle at 50% 0,#3a1a4a,#0a0610 80%);text-align:left"><div style="font-size:18px;color:#d9b8ff"><b>The Crypt of Ashes</b></div><div style="font-size:12px;opacity:.85;margin:4px 0 8px">A haunted crypt beneath the meadow. Recommended level 7+. Monsters here are stronger than outside.</div>${DG_BOSSES.map(b => `<div style="font-size:13px;margin:3px 0">${inD && DG.bossDown.has(b.id) ? '✔' : '☠'} <b>${b.name}</b> <small style="opacity:.75">· Lv ${b.lvl}</small></div>`).join('')}<div style="font-size:12px;opacity:.8;margin-top:6px">3 bosses · about 60 monsters${low ? '<br><span style="color:#ff9a6a">⚠ You are below the recommended level.</span>' : ''}</div></div>${inD ? '<button onclick="leaveDungeon();toggleDg()">🚪 Leave the Dungeon</button>' : '<button onclick="enterDungeon()">⚔ Enter the Dungeon</button>'}</div>`;
+}
 function MOUNTANIM(dt, t) {
     pvpTick(dt, t);
     wbTick(dt, t);
@@ -2912,6 +3663,8 @@ function MOUNTANIM(dt, t) {
     saveTick(dt);
     chanTick(dt, t);
     warTick(dt, t);
+    pitTick(dt, t);
+    dgTick(dt, t);
     if (P.cast) {
         if (P.mv) {
             P.cast = null;
@@ -2938,7 +3691,7 @@ function MOUNTANIM(dt, t) {
         P.vy = 0;
     if (was > .05 && P.jy === 0)
         burst(new THREE.Vector3(P.pos.x, 0, P.pos.z), 0xc8b890, 7, .3, .1);
-    P.pos.y = P.by + P.jy;
+    P.pos.y = P.by + P.jy + groundH(P.pos.x, P.pos.z);
     if (P.mm) {
         if (P.mm.tl)
             P.mm.tl.rotation.y = Math.sin(t * (P.mv ? 10 : 3)) * .35;
@@ -2947,7 +3700,8 @@ function MOUNTANIM(dt, t) {
             P.mm.wings.forEach((w, i) => w.rotation.z = (i ? -1 : 1) * (Math.sin(t * (P.mv ? 9 : 5)) * .5 + .15));
     }
 }
-function startCast(i) { if (P.mount)
+function startCast(i) { if (DG.on)
+    return say('You cannot mount inside the dungeon.'); if (P.mount)
     dismount(); const d = ML()[i]; if (mobs.some(m => m.aggro && d3(m, P) < 45))
     return say('You cannot mount while in combat!'); P.cast = { i, t: 1.2, max: 1.2 }; say('Summoning ' + d.n + '...'); }
 function mountToggle() { if (P.mount)
@@ -2968,11 +3722,15 @@ function togglePause() { if (!running)
     return cancelGround(); if (mapOpen)
     return toggleMap(); if ($('mb').style.display == 'flex')
     return toggleBook(); if ($('pv').style.display == 'flex')
-    return togglePvP(); if ($('adm').style.display == 'flex') return toggleAdm(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
+    return togglePvP(); if ($('dgw').style.display == 'flex') return toggleDg(); if ($('adm').style.display == 'flex') return toggleAdm(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
 function toggleMap() { if (!running)
-    return; mapOpen = !mapOpen; $('map').style.display = mapOpen ? 'flex' : 'none'; if (mapOpen)
+    return; if (DG.on)
+    return say('The map is unavailable inside the dungeon.'); mapOpen = !mapOpen; $('map').style.display = mapOpen ? 'flex' : 'none'; if (mapOpen)
     drawMap(); }
 function toMenu() {
+    if (DG.on)
+        leaveDungeon(true);
+    pitReset();
     endChan();
     dismissMinions();
     cancelGround(true);
@@ -3053,6 +3811,14 @@ function drawMap() {
     g.fillStyle = '#fff';
     g.font = '11px Georgia';
     g.fillText('Town', X(0) - 14, Z(0) + TOWN * K + 12);
+    g.strokeStyle = '#ff4444';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(X(ARENA.x), Z(ARENA.z), ARENA.R * K, 0, 6.3);
+    g.stroke();
+    g.fillStyle = '#ff7a7a';
+    g.font = 'bold 11px Georgia';
+    g.fillText('⚔ The Pit (PvP)', X(ARENA.x) - 38, Z(ARENA.z) + 4);
     wbots.forEach(b => { if (b.dead) return; g.fillStyle = b.role == 'town' ? '#ffe48a' : '#4fc3ff'; g.beginPath(); g.arc(X(b.pos.x), Z(b.pos.z), 3.5, 0, 6.3); g.fill(); g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); });
     mobs.forEach(m => { g.fillStyle = 'hsl(' + Math.max(0, 120 - m.lvl * 18) + ',80%,50%)'; g.fillRect(X(m.pos.x) - 2, Z(m.pos.z) - 2, 4, 4); });
     g.save();
@@ -3123,7 +3889,7 @@ function ANIM(dt, t) {
         P.sh = null;
     }
     sway.forEach(l => { l.rotation.z = Math.sin(t * 1.3 + l.userData.ph) * .04; });
-    dying = dying.filter(o => { o.t += dt; o.m.scale.setScalar(Math.max(.01, 1 - o.t * 1.6)); o.m.rotation.z = o.t * 2.2; o.m.position.y = -o.t * .5; if (o.t > .6) {
+    dying = dying.filter(o => { o.t += dt; o.m.scale.setScalar(Math.max(.01, 1 - o.t * 1.6)); o.m.rotation.z = o.t * 2.2; o.m.position.y = (o.y0 || 0) - o.t * .5; if (o.t > .6) {
         S.remove(o.m);
         return false;
     } return true; });
@@ -3241,6 +4007,9 @@ addEventListener('keydown', e => { const n = KN[e.code]; if (n) {
 } if (e.code == 'KeyR') {
     toggleAdm();
     return;
+} if (e.code == 'KeyJ') {
+    toggleDg();
+    return;
 } if (e.code == 'KeyO') {
     togglePvP();
     return;
@@ -3329,7 +4098,7 @@ function update(dt, t) {
     const frozen = G.cd > 0 || (DU && DU.cd > 0), mv = v.lengthSq() > 0 && !P.dead && !frozen;
     if (mv) {
         v.normalize();
-        P.pos.addScaledVector(v, 9 * dt * (P.mount ? P.mount.sp : 1) * (ADM.speed ? 2.5 : 1) * (P.sprint > 0 ? 1.7 : 1));
+        P.pos.addScaledVector(v, 9 * dt * (P.mount ? P.mount.sp : 1) * (ADM.speed ? 2.5 : 1) * (P.sprint > 0 ? 1.7 : 1) * (P.slowT > 0 ? .5 : 1));
         P.mesh.rotation.y = Math.atan2(v.x, v.z);
     }
     if (G.on) {
@@ -3344,6 +4113,9 @@ function update(dt, t) {
             P.pos.x = G.c.x + dx / l * (G.r - 1.5);
             P.pos.z = G.c.z + dz / l * (G.r - 1.5);
         }
+    }
+    else if (DG.on) {
+        dgClamp();
     }
     else {
         P.pos.x = Math.max(-WORLD, Math.min(WORLD, P.pos.x));
@@ -3412,15 +4184,15 @@ function update(dt, t) {
             }
         }
         else if (!town && ((d < 17 && !(P.mount && P.mount.fly)) || m.aggro) && d < 55) {
-            if (d > 2.6)
-                go(P.pos.x, P.pos.z, (5 + m.lvl * .35) * (m.slow > 0 ? .4 : 1));
+            if (d > (m.rng || 2.6))
+                go(P.pos.x, P.pos.z, (5 + m.lvl * .35) * (m.slow > 0 ? .4 : 1) * (m.spd || 1));
             else {
                 m.mesh.rotation.y = Math.atan2(P.pos.x - m.pos.x, P.pos.z - m.pos.z);
                 if (m.cd <= 0 && !(P.mount && P.mount.fly)) {
-                    m.cd = 1.1;
+                    m.cd = m.acd || 1.1;
                     m.lunge = .25;
                     let dm = Math.max(1, Math.round(2 + m.lvl * 2.2 - P.lvl * .4));
-                    dm = Math.max(1, Math.round(dm * specT()));
+                    dm = Math.max(1, Math.round(dm * (m.dm || 1) * specT()));
                     if (P.shield > 0) {
                         const a = Math.min(P.shield, dm);
                         P.shield -= a;
@@ -3443,7 +4215,7 @@ function update(dt, t) {
             if (Math.hypot(m.hx - m.pos.x, m.hz - m.pos.z) > .5)
                 go(m.hx, m.hz, 4);
         }
-        m.pos.y = m.mv ? Math.abs(Math.sin(t * 10 + m.hx)) * .3 : 0;
+        m.pos.y = groundH(m.pos.x, m.pos.z) + (m.mv ? Math.abs(Math.sin(t * 10 + m.hx)) * .3 : 0);
         m.mesh.scale.setScalar(1 + m.lunge * .8);
     });
     bolts = bolts.filter(b => {
@@ -3465,7 +4237,7 @@ function update(dt, t) {
         if (l < 1) {
             if (b.wbBy)
                 wbHitMob(b.m, b.d, b.wbBy);
-            else if (b.m === P || b.m.ally || b.m.mn)
+            else if (b.m === P || b.m.ally || b.m.mn || (b.m.wb && b.src))
                 foeHit(b.m, b.d, b.src);
             else
                 hit(b.m, b.d);
@@ -3485,6 +4257,8 @@ function update(dt, t) {
     if (P.hp <= 0 && G.on)
         pvpPlayerDown();
     else if (P.hp <= 0) {
+        if (DG.on)
+            leaveDungeon(true);
         dismount();
         P.cast = null;
         say('<span style="color:#f66">You died! Respawning in town...</span>');
@@ -3497,7 +4271,8 @@ function update(dt, t) {
     // camera
     const cp = Math.cos(pit);
     let cx = P.pos.x + Math.sin(yaw) * cp * zoom, cy = P.pos.y + 2 + Math.sin(pit) * zoom, cz = P.pos.z + Math.cos(yaw) * cp * zoom;
-    if (G.on && camBlock.length) {
+    const blk = G.on ? camBlock : DG.on ? dgBlock : [];
+    if (blk.length) {
         // pull the camera in front of any wall between it and the player
         const o = new THREE.Vector3(P.pos.x, P.pos.y + 2, P.pos.z), dv = new THREE.Vector3(cx - o.x, cy - o.y, cz - o.z), len = dv.length() || 1;
         camRay.set(o, dv.normalize());
@@ -3507,7 +4282,7 @@ function update(dt, t) {
                 return false;
             n = n.parent;
         } return true; };
-        const h = camRay.intersectObjects(camBlock, false).find(x => vis(x.object));
+        const h = camRay.intersectObjects(blk, false).find(x => vis(x.object));
         if (h) {
             const k = Math.max(2.2, h.distance - .8) / len;
             cx = o.x + (cx - o.x) * k;
@@ -3539,7 +4314,7 @@ function hud() {
     }
     else
         tf.style.display = 'none';
-    $('qt').innerHTML = `<b style="color:var(--gold)">Quest</b><br>${Q.on ? `Slay beasts: ${Q.have}/${Q.need}` : 'None — talk to the Elder'}<br><small>${Math.hypot(P.pos.x, P.pos.z) < TOWN ? 'Safe zone' : (G.on ? 'Arena' : ZONES[zoneAt(P.pos.x, P.pos.z)].e + ' ' + ZONES[zoneAt(P.pos.x, P.pos.z)].n)}</small>`;
+    $('qt').innerHTML = `<b style="color:var(--gold)">Quest</b><br>${Q.on ? `Slay beasts: ${Q.have}/${Q.need}` : 'None — talk to the Elder'}<br><small>${Math.hypot(P.pos.x, P.pos.z) < TOWN ? 'Safe zone' : (G.on ? 'Arena' : DG.on ? '🏰 ' + DG.name : ZONES[zoneAt(P.pos.x, P.pos.z)].e + ' ' + ZONES[zoneAt(P.pos.x, P.pos.z)].n + (P.pit ? ' · ⚔ PvP' : ''))}</small>`;
     [...$('hb').children].forEach((s, i) => { const u = s.querySelector('u'), a = P.cfg.ab[i]; u.style.height = P.cds[i] > 0 ? (P.cds[i] / a.cd * 100) + '%' : '0'; u.textContent = P.cds[i] > 0 ? P.cds[i].toFixed(1) : ''; s.style.borderColor = P.mp >= a.cost ? '#e8b84a' : '#555'; });
     const c = $('mm').getContext('2d'), k = .9;
     c.clearRect(0, 0, 120, 120);
