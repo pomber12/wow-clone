@@ -29,5 +29,5 @@
 <img width="723" height="414" alt="admin screen" src="https://github.com/user-attachments/assets/f8a5c1b2-c3bb-425f-adec-6eafc49e8360" />
 <img width="1446" height="736" alt="rogue screen" src="https://github.com/user-attachments/assets/d696dd45-028a-40a0-9484-f9a8663ada17" />
 <img width="1453" height="734" alt="warrior screen" src="https://github.com/user-attachments/assets/b9981214-8ae8-4917-ae59-768b119c4e45" />
-<img width="1330" height="716" alt="character select" src="https://github.com/user-attachments/assets/c340c966-2f61-4005-abba-1f288e9cbf85" />
+
 
