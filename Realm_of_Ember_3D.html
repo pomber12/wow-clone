@@ -25,7 +25,7 @@
 <button onclick="togglePause()">▶ Resume</button>
 <button onclick="toggleMap()">🗺️ Map (M)</button>
 <button onclick="togglePause();toggleBook()">🐴 Mounts (P)</button>
-<button onclick="togglePause();togglePvP()">⚔️ PvP (O)</button><button onclick="togglePause();toggleAdm()">R Admin (R)</button>
+<button onclick="togglePause();togglePvP()">⚔️ PvP (O)</button><button onclick="togglePause();togglePets()">🐾 Pets (K)</button><button onclick="togglePause();toggleToys()">🎁 Toys (T)</button><button onclick="togglePause();toggleAdm()">R Admin (R)</button>
 <button onclick="toMenu()">🏠 Character Select</button>
 </div>
 <small>Your hero is saved automatically.</small>
@@ -43,6 +43,10 @@
 </div>
 <div id="pv" class="p">
 </div>
+<div id="petw" class="p"></div>
+<div id="toyw" class="p"></div>
+<div id="jcp" class="p" style="left:50%;transform:translateX(-50%);top:110px;display:none;text-align:center;z-index:4;min-width:240px"></div>
+<div id="toyb" class="p" style="left:10px;top:160px;display:none;color:#ff8fc8;font-weight:bold;z-index:3;padding:2px 10px"></div>
 <div id="bn">
 </div>
 <div id="pvh" class="p">
@@ -65,10 +69,12 @@
 <button onclick="toggleMap()" title="Map (M)"><i>🗺️</i><span>Map</span></button>
 <button onclick="toggleBook()" title="Mounts (P)"><i>🐴</i><span>Mounts</span></button>
 <button onclick="togglePvP()" title="PvP (O)"><i>⚔️</i><span>PvP</span></button>
+<button onclick="togglePets()" title="Pets (K)"><i>🐾</i><span>Pets</span></button>
+<button onclick="toggleToys()" title="Toys (T)"><i>🎁</i><span>Toys</span></button>
 <button onclick="toggleDg()" title="Dungeons (J)"><i>🏰</i><span>Dungeons</span></button>
 </div>
 <button id="admbtn" onclick="toggleAdm()" title="Admin panel (R)">R</button>
-<div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · F: nearby hero · M: map · Esc: menu</div>
+<div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · K: pets · T: toys · F: nearby hero · M: map · Esc: menu</div>
 <div id="cs">
 <div id="cst"><h1>Realm of Ember</h1><div id="csn"></div></div>
 <div id="csl"></div>
@@ -104,9 +110,13 @@
 <small>Holy tank</small><br>
 <small id="lv_paladin" style="color:var(--gold)"></small>
 </button>
-<button onclick="chooseClass('warlock')">🟣 Warlock<br>
-<small>Curses · life drain</small><br>
+<button onclick="chooseClass('warlock')">🌸 Spiritcaller<br>
+<small>Spirits · sprites</small><br>
 <small id="lv_warlock" style="color:var(--gold)"></small>
+</button>
+<button onclick="chooseClass('druid')">🦁 Wildheart<br>
+<small>Nature · lion form</small><br>
+<small id="lv_druid" style="color:var(--gold)"></small>
 </button>
 </div>
 <button id="cbk" onclick="showSelect()" style="margin-top:8px">← Back to your heroes</button>

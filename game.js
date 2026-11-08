@@ -1,4 +1,5 @@
 const $ = id => document.getElementById(id), rnd = (a, b) => a + Math.random() * (b - a);
+const CNAME = c => ({ warlock: 'Spiritcaller', druid: 'Wildheart' }[c] || (c ? c[0].toUpperCase() + c.slice(1) : ''));
 const R = new THREE.WebGLRenderer({ antialias: true });
 R.setPixelRatio(Math.min(devicePixelRatio, 2));
 R.setSize(innerWidth, innerHeight);
@@ -100,6 +101,8 @@ for (let i = 0; i < gp.count; i++) {
 gGeo.setAttribute('color', new THREE.BufferAttribute(gcol, 3));
 // ===== The Pit: a sunken PvP arena in the starting meadow =====
 const ARENA = { x: 52, z: 40, R: 30, F: 18, D: 4.5 };
+// Jump Challenge course, just north-west of The Pit
+const JC = { x: 16, z: 76, R: 19 };
 function groundH(x, z) {
     const d = Math.hypot(x - ARENA.x, z - ARENA.z);
     if (d >= ARENA.R)
@@ -217,6 +220,8 @@ function pt(zi, minD) {
             x = Math.cos(a) * d;
             z = Math.sin(a) * d;
             if (Math.hypot(x - ARENA.x, z - ARENA.z) < ARENA.R + 6)
+                continue;
+            if (Math.hypot(x - JC.x, z - JC.z) < JC.R)
                 continue;
         }
         else {
@@ -552,8 +557,52 @@ function buildDaggers(g, w) {
     ra.position.set(.75, 1.7, 0);
     g.add(ra);
     g.arm.children.forEach(o => { o.visible = false; });
-    g.arm.add(mkArm(-1));
+    const la = mkArm(-1);
+    g.arm.add(la);
     g.ra = ra;
+    // X-slash: both daggers wind up overhead, then cut down and across so the blades cross in an X
+    const xm = new THREE.MeshBasicMaterial({ color: 0xe8f0ff, transparent: true, opacity: 0, depthWrite: false, side: 2 }), xf = new THREE.Group();
+    xf.position.set(0, 1.55, 1.15);
+    [-1, 1].forEach(q => { const b = new THREE.Mesh(new THREE.PlaneGeometry(1.7, .09), xm); b.rotation.z = q * PI / 4; xf.add(b); });
+    xf.visible = false;
+    g.add(xf);
+    g.xSlash = sw => {
+        if (!(sw > 0)) {
+            ra.rotation.set(0, 0, 0);
+            la.rotation.set(0, 0, 0);
+            ra.position.z = 0;
+            la.position.z = 0;
+            xf.visible = false;
+            return;
+        }
+        const u = 1 - sw / .3, ez = k => k * k * (3 - 2 * k);
+        let rx, rz;
+        if (u < .3) {
+            const k = ez(u / .3);
+            rx = -1.6 * k;
+            rz = .55 * k;
+        }
+        else if (u < .7) {
+            const k = ez((u - .3) / .4);
+            rx = -1.6 + 2.1 * k;
+            rz = .55 - 1.5 * k;
+        }
+        else {
+            const k = ez((u - .7) / .3);
+            rx = .5 * (1 - k);
+            rz = -.95 * (1 - k);
+        }
+        g.arm.rotation.x = 0;
+        ra.rotation.set(rx + .08, rz, rz * .3);
+        la.rotation.set(rx - .08, -rz, -rz * .3);
+        ra.position.z = .1 * Math.max(0, -rz);
+        la.position.z = -.05 * Math.max(0, -rz);
+        // flash a silver X in front when the blades cross
+        const f = u > .45 && u < .95 ? Math.sin((u - .45) / .5 * PI) : 0;
+        xf.visible = f > .02;
+        xm.opacity = f * .85;
+        xf.scale.setScalar(.7 + .5 * f);
+    };
     g.w = { rotation: { set x(v) { ra.rotation.x = -v * .55; ra.position.z = -v * .08; if (v)
                 g.arm.rotation.x = v * -.4; }, get x() { return ra.rotation.x; } } };
 }
@@ -563,7 +612,8 @@ const HLOOK = {
     paladin: { kind: 'plate', cloth: 0xf2f2f8, trim: 0xe8b84a, metal: 0xe6dcc0 },
     mage: { kind: 'robe', cloth: 0x3b63c9, trim: 0xe8b84a, hair: 0xd0d0d8 },
     priest: { kind: 'robe', cloth: 0xf0f0f4, trim: 0xe8b84a, hair: 0xe8c860 },
-    warlock: { kind: 'robe', cloth: 0x4a1a6a, trim: 0x8a4aba, hair: 0x181018 },
+    warlock: { kind: 'robe', cloth: 0x2f9a86, trim: 0xf2d27a, hair: 0xf0b8d8 },
+    druid: { kind: 'leather', cloth: 0x5a8a3a, trim: 0xd8b860, leather: 0x7a5a32, hair: 0x6a3a1a },
     rogue: { kind: 'leather', cloth: 0x2a2438, trim: 0x8a7ab0, leather: 0x3a2a30, hair: 0x181820 },
     hunter: { kind: 'leather', cloth: 0x3f6a30, trim: 0xb08a50, leather: 0x6a4a2a }
 };
@@ -623,7 +673,9 @@ function hero(col, cls, seed) {
     else if (cls == 'paladin')
         cape(0xe8e4f4, 1.7);
     else if (cls == 'warlock')
-        cape(0x2a1040, 1.6);
+        cape(0x1f6e60, 1.6);
+    else if (cls == 'druid')
+        cape(0x3a6a2a, 1.3);
     else if (cls == 'rogue')
         cape(0x1c1828, 1.15);
     else if (cls == 'hunter') {
@@ -641,7 +693,7 @@ function hero(col, cls, seed) {
     sp(.4, 0, 0, 0, mt.skin, Hd, .92, 1.02, .95);
     [-1, 1].forEach(s => {
         sp(.065, s * .14, .04, .34, mt.white, Hd, 1, 1, .6);
-        sp(.036, s * .14, .04, .385, cls == 'warlock' ? new THREE.MeshBasicMaterial({ color: 0x66ff66 }) : mt.eye, Hd);
+        sp(.036, s * .14, .04, .385, mt.eye, Hd);
         sp(.08, s * .38, 0, 0, mt.skin, Hd, .5, 1, .8);
     });
     bx(.07, .1, .08, 0, -.03, .38, mt.skin, Hd);
@@ -678,10 +730,31 @@ function hero(col, cls, seed) {
         sp(.07, 0, .22, .4, new THREE.MeshBasicMaterial({ color: 0xffee88 }), Hd);
     }
     else if (cls == 'warlock') {
-        hcap(.52, .66, mt.cloth);
-        cone(.1, .5, -.3, .5, 0, L(0xe0dac0), Hd, .5);
-        cone(.1, .5, .3, .5, 0, L(0xe0dac0), Hd, -.5);
-        bx(.7, .65, .3, 0, -.18, -.3, mt.cloth, Hd);
+        // Spiritcaller: soft hair with a flower crown
+        hcap(.45, .56, mt.hair);
+        bx(.72, .8, .25, 0, -.26, -.3, mt.hair, Hd);
+        const crown = new THREE.Mesh(new THREE.TorusGeometry(.42, .045, 6, 24), L(0x4a9a3a));
+        crown.rotation.x = Math.PI / 2;
+        crown.position.set(0, .2, 0);
+        Hd.add(crown);
+        [0xff8fc8, 0xffffff, 0xffd23a, 0x9adfff, 0xff8fc8, 0xffffff].forEach((c, k) => { const a = k / 6 * Math.PI * 2; sp(.075, Math.cos(a) * .42, .23, Math.sin(a) * .42, new THREE.MeshBasicMaterial({ color: c }), Hd); });
+        sp(.05, 0, -.13, .37, L(0xff9a9a), Hd, 1.6, .5, .5);
+    }
+    else if (cls == 'druid') {
+        // Wildheart: leafy headband and little antlers
+        hcap(.45, .56, mt.hair);
+        bx(.72, .7, .22, 0, -.2, -.3, mt.hair, Hd);
+        const band = new THREE.Mesh(new THREE.TorusGeometry(.43, .05, 6, 24), L(0x3a7a2a));
+        band.rotation.x = Math.PI / 2;
+        band.position.set(0, .14, 0);
+        Hd.add(band);
+        [-1, 1].forEach(q => {
+            cyl(.035, .045, .45, q * .25, .42, 0, L(0x8a6a44), Hd, 1, 1, 5).rotation.z = -q * .35;
+            cyl(.03, .035, .22, q * .36, .58, 0, L(0x8a6a44), Hd, 1, 1, 5).rotation.z = -q * 1.1;
+            cyl(.03, .035, .2, q * .2, .64, .04, L(0x8a6a44), Hd, 1, 1, 5).rotation.z = q * .3;
+        });
+        for (let k = 0; k < 5; k++)
+            sp(.08, -.3 + k * .15, .18, .36, L(k % 2 ? 0x5aa83a : 0x3a8a2a), Hd, 1, .5, .6);
     }
     else if (cls == 'rogue') {
         hcap(.5, .64, mt.cloth);
@@ -694,7 +767,7 @@ function hero(col, cls, seed) {
         bx(.06, .5, .04, .3, .5, -.05, L(0xc84a3a), Hd).rotation.z = -.5;
         bx(.7, .6, .2, 0, -.1, -.28, mt.hair, Hd);
     }
-    if (kind != 'plate' && cls != 'mage' && cls != 'priest' && cls != 'warlock' && cls != 'rogue')
+    if (kind != 'plate' && cls != 'mage' && cls != 'priest' && cls != 'warlock' && cls != 'druid' && cls != 'rogue')
         hcap(.43, .55, mt.hair);
     // ---------- arms ----------
     const sleeve = kind == 'plate' ? mt.metal : kind == 'leather' ? mt.leather : mt.cloth, fore = kind == 'robe' ? mt.cloth : kind == 'plate' ? mt.metal : mt.leather;
@@ -724,9 +797,9 @@ function hero(col, cls, seed) {
     const w = new THREE.Group();
     g.add(w);
     w.position.set(.85, 1.08, .62);
-    if (cls == 'mage' || cls == 'priest' || cls == 'warlock') {
+    if (cls == 'mage' || cls == 'priest' || cls == 'warlock' || cls == 'druid') {
         cyl(.05, .07, 2.5, 0, .3, 0, L(0x5a3a1a), w, 1, 1, 6);
-        g.orb = add(new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), new THREE.MeshBasicMaterial({ color: { priest: 0xffee88, warlock: 0xaa44ff }[cls] || 0xff7722 })), 0, 1.65, 0, w);
+        g.orb = add(new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), new THREE.MeshBasicMaterial({ color: { priest: 0xffee88, warlock: 0x7affe0, druid: 0x9dff6a }[cls] || 0xff7722 })), 0, 1.65, 0, w);
         if (cls == 'priest') {
             const rg = new THREE.Mesh(new THREE.TorusGeometry(.36, .04, 6, 20), mt.trim);
             rg.position.set(0, 1.65, -.05);
@@ -740,7 +813,7 @@ function hero(col, cls, seed) {
         }
         else
             for (let k = 0; k < 3; k++)
-                cone(.06, .34, Math.cos(k * 2.09) * .24, 1.58, Math.sin(k * 2.09) * .24, L(0x2a1a30), w, 0, 0);
+                cone(.06, .34, Math.cos(k * 2.09) * .24, 1.58, Math.sin(k * 2.09) * .24, L(cls == 'druid' ? 0x3a8a2a : 0xf2d27a), w, 0, 0);
     }
     else if (cls == 'hunter') {
         const bow = add(new THREE.Mesh(new THREE.TorusGeometry(.85, .05, 6, 16, Math.PI), L(0x6a4a1a)), 0, .1, 0, w);
@@ -794,9 +867,9 @@ const CL = { warrior: { hp: 150, mp: 60, col: 0xc8553d, regen: 7, ab: [
             { n: 'Charge', cost: 10, cd: 8, range: 30, need: 1, f: () => { const m = P.t, v = new THREE.Vector3().subVectors(m.pos, P.pos).setLength(Math.max(0, d3(m, P) - 2.5)); P.pos.add(v); hit(m, dmg(1.2)); m.slow = 2; } }
         ] },
     mage: { hp: 95, mp: 120, col: 0x3b63c9, regen: 5, ab: [
-            { n: 'Fireball', cost: 10, cd: .9, range: 28, need: 1, f: () => { const b = new THREE.Mesh(new THREE.SphereGeometry(.35, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff7711 })); b.position.copy(P.pos).y += 2; S.add(b); bolts.push({ b, m: P.t, d: dmg(1.8) }); } },
+            { n: 'Fireball', cost: 10, cd: .9, range: 28, need: 1, f: () => { const b = new THREE.Mesh(new THREE.SphereGeometry(.35, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff7711 })); b.position.copy(P.pos).y += 2; S.add(b); bolts.push({ b, m: P.t, d: dmg(2.6) }); } },
             { n: 'Frost Nova', cost: 25, cd: 6, f: () => { mobs.slice().forEach(m => { if (d3(m, P) < 12) {
-                    hit(m, dmg(.8));
+                    hit(m, dmg(1.3));
                     m.slow = 3;
                 } }); nova(); } },
             { n: 'Heal', cost: 25, cd: 8, f: () => heal(.4) },
@@ -807,10 +880,10 @@ const keys = {};
 const d3 = (a, b) => Math.hypot((a.pos ? a.pos.x : a.x) - (b.pos ? b.pos.x : b.x), (a.pos ? a.pos.z : a.z) - (b.pos ? b.pos.z : b.z));
 const fwd = () => new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
 const PVPL = 10, PL = () => (P.pv ? PVPL : P.lvl), PG = () => (P.pv ? 0 : P.gear);
-const dmg = k => Math.round((10 + PL() * 3 + PG() * 2) * k * rnd(.85, 1.15) * specD());
+const dmg = k => { let m = 1; if (P.amb) { m = 2; P.amb = 0; } return Math.round((10 + PL() * 3 + PG() * 2) * k * rnd(.85, 1.15) * specD() * m); };
 function say(s) { logs.unshift(s); logs.length = Math.min(logs.length, 6); $('log').innerHTML = logs.map((l, i) => `<div style="opacity:${1 - i * .14}">${l}</div>`).join(''); }
 function float(pos, s, c) { const el = document.createElement('div'); el.className = 'ft'; el.style.color = c; el.textContent = s; document.body.appendChild(el); fx.push({ el, p: pos.clone().add(new THREE.Vector3(0, 3, 0)), t: 1.1 }); }
-function hit(m, d) { if (!m || G.cd > 0 || (DU && (DU.cd > 0 || (DU.over && DU.b === m))))
+function hit(m, d) { if (!(d >= 0)) d = 1; if (m && !(m.hp >= -1e9)) m.hp = m.max || 1; if (!m || m.adm == 'friendly' || G.cd > 0 || (DU && (DU.cd > 0 || (DU.over && DU.b === m))))
     return; m.hp -= d; m.aggro = true; float(m.pos, d, '#ffd24a'); burst(m.pos, 0xffaa33, 5); if (m.hp <= 0)
     kill(m); }
 function heal(f) { const h = Math.round(P.max * f * healM()); P.hp = Math.min(P.max, P.hp + h); float(P.pos, '+' + h, '#6f6'); burst(P.pos, 0x66ff88, 12, 1.5); }
@@ -924,17 +997,34 @@ Object.assign(CL, {
             { n: 'Consecrate', cost: 25, cd: 9, f: () => { mobs.slice().forEach(m => { if (d3(m, P) < 9)
                     hit(m, dmg(1.1)); }); P.shield = (P.shield || 0) + 40 + PL() * 5; nova(); } }
         ] },
-    warlock: { hp: 95, mp: 130, col: 0x6a2a8a, regen: 5, ab: [
-            { n: 'Shadow Bolt', cost: 10, cd: 1, range: 28, need: 1, f: () => shot(0x9933ff, dmg(1.9)) },
-            { n: 'Corruption', cost: 15, cd: 8, range: 28, need: 1, f: () => { P.t.dot = { n: 6, d: dmg(.5) }; P.t.aggro = true; burst(P.t.pos, 0x66aa22, 8); } },
-            { n: 'Drain Life', cost: 20, cd: 7, range: 25, need: 1, f: () => { hit(P.t, dmg(1.2)); heal(.15); } },
-            { n: 'Hellfire', cost: 30, cd: 8, f: () => { mobs.slice().forEach(m => { if (d3(m, P) < 9)
-                    hit(m, dmg(1.5)); }); P.hp = Math.max(1, P.hp - Math.round(P.max * .05)); burst(P.pos, 0xff4411, 20); nova(); } }
+    warlock: { hp: 95, mp: 130, col: 0x2f9a86, regen: 5, ab: [
+            { n: 'Spirit Bolt', cost: 10, cd: 1, range: 28, need: 1, f: () => shot(0x66e0ff, dmg(1.9)) },
+            { n: 'Thorn Hex', cost: 15, cd: 8, range: 28, need: 1, f: () => { P.t.dot = { n: 6, d: dmg(.5), c: 0x7be04a }; P.t.aggro = true; burst(P.t.pos, 0x7be04a, 8); } },
+            { n: 'Life Bloom', cost: 20, cd: 7, range: 25, need: 1, f: () => { hit(P.t, dmg(1.2)); heal(.15); burst(P.pos, 0xff8fc8, 10, 1.2); } },
+            { n: 'Starburst', cost: 30, cd: 8, f: () => { mobs.slice().forEach(m => { if (d3(m, P) < 9)
+                    hit(m, dmg(1.5)); }); burst(P.pos, 0x9affea, 24, 1.6); burst(P.pos, 0xffe48a, 14, 1.4); nova(); } }
         ] }
 });
 const MOUNTS = [{ n: 'Brown Horse', e: '🐴', lvl: 0, sp: 1.7, col: 0x8a5a2a, fly: 0 }, { n: 'Dire Wolf', e: '🐺', lvl: 0, sp: 2, col: 0x6a6a74, fly: 0 }, { n: 'Gryphon', e: '🦅', lvl: 0, sp: 2.1, col: 0xc8a050, fly: 1, wing: 0xe8e0c8 }, { n: 'Ember Drake', e: '🐉', lvl: 0, sp: 2.6, col: 0x2a8a4a, fly: 1, wing: 0x1a5a30, drake: 1 }];
-const CM = { warrior: { n: 'Iron Boar', e: '🐗', sp: 2.2, col: 0x5a5a64, fly: 0, cls: 1 }, mage: { n: 'Arcane Unicorn', e: '🦄', sp: 2.3, col: 0x7a5ad8, fly: 1, cls: 1, wing: 0xc0a0ff }, rogue: { n: 'Shadow Panther', e: '🐆', sp: 2.4, col: 0x2a2a3a, fly: 0, cls: 1 }, priest: { n: 'Radiant Swan', e: '🦢', sp: 2.2, col: 0xf0f0ff, fly: 1, cls: 1, wing: 0xffffff }, hunter: { n: 'Great Bear', e: '🐻', sp: 2.1, col: 0x6a4a2a, fly: 0, cls: 1 }, paladin: { n: 'Golden Charger', e: '🐎', sp: 2.3, col: 0xe8c84a, fly: 0, cls: 1 }, warlock: { n: 'Hellsteed', e: '👹', sp: 2.4, col: 0x8a1a1a, fly: 0, cls: 1 } };
-const ML = () => MOUNTS.concat([CM[P.cls]]);
+// ===== Wildheart (druid): nature magic in elf form, turns into a lion =====
+CL.druid = { hp: 120, mp: 110, col: 0x5a8a3a, regen: 7, ab: [
+        { n: 'Thorn Lash', cost: 8, cd: .9, range: 28, need: 1, f: () => shot(0x7be04a, dmg(1.6), null, .25) },
+        { n: 'Entangle', cost: 15, cd: 8, range: 26, need: 1, f: () => { const m = P.t; hit(m, dmg(.8)); m.slow = 4; m.stun = Math.max(m.stun || 0, 1.5); burst(m.pos, 0x3a8a2a, 14, .6, .2); burst(m.pos, 0x7be04a, 8, 1); } },
+        { n: 'Rejuvenate', cost: 20, cd: 10, f: () => { P.hot = { n: 6, a: 0 }; heal(.1); burst(P.pos, 0x9dff6a, 14, 1.3); } },
+        { n: 'Lion Form', cost: 10, cd: 1.5, f: () => lionToggle() }
+    ] };
+CL.druid.abL = [
+    { n: 'Claw', cost: 5, cd: .6, range: 4.5, need: 1, f: () => { hit(P.t, dmg(1.8)); burst(P.t.pos, 0xffd27a, 6, 1); } },
+    { n: 'Pounce', cost: 15, cd: 7, range: 26, need: 1, f: () => { const m = P.t, v = new THREE.Vector3(P.pos.x - m.pos.x, 0, P.pos.z - m.pos.z).normalize(); burst(P.pos, 0xd9a54a, 10, 1); P.pos.set(m.pos.x + v.x * 2.2, 0, m.pos.z + v.z * 2.2); P.gl = undefined; P.onP = null; hit(m, dmg(1.4)); m.stun = Math.max(m.stun || 0, 1.2); } },
+    { n: 'Roar', cost: 20, cd: 9, f: () => { mobs.slice().forEach(m => { if (d3(m, P) < 9) {
+            hit(m, dmg(1.1));
+            m.slow = 3;
+        } }); burst(P.pos, 0xffd27a, 20, 1.4); nova(); float(P.pos, 'ROAR!', '#ffd27a'); } },
+    { n: 'Human Form', cost: 0, cd: 1.5, f: () => lionToggle() }
+];
+Object.assign(ICONS, { 'Thorn Lash': ['🌱', '#3a8a2a'], Entangle: ['🍃', '#2a6a2a'], Rejuvenate: ['🍀', '#3a9a5a'], 'Lion Form': ['🦁', '#c08a2a'], Claw: ['🐾', '#a0702a'], Pounce: ['💥', '#c0602a'], Roar: ['🗯️', '#c9a02a'], 'Human Form': ['🧝', '#3a7a3a'] });
+const CM = { warrior: { n: 'Iron Boar', e: '🐗', sp: 2.2, col: 0x5a5a64, fly: 0, cls: 1 }, mage: { n: 'Arcane Unicorn', e: '🦄', sp: 2.3, col: 0x7a5ad8, fly: 1, cls: 1, wing: 0xc0a0ff }, rogue: { n: 'Shadow Panther', e: '🐆', sp: 2.4, col: 0x2a2a3a, fly: 0, cls: 1 }, priest: { n: 'Radiant Swan', e: '🦢', sp: 2.2, col: 0xf0f0ff, fly: 1, cls: 1, wing: 0xffffff }, hunter: { n: 'Great Bear', e: '🐻', sp: 2.1, col: 0x6a4a2a, fly: 0, cls: 1 }, paladin: { n: 'Golden Charger', e: '🐎', sp: 2.3, col: 0xe8c84a, fly: 0, cls: 1 }, warlock: { n: 'Spirit Steed', e: '🦄', sp: 2.4, col: 0x9adfe8, fly: 0, cls: 1 }, druid: { n: 'Forest Stag', e: '🦌', sp: 2.3, col: 0x9a6a3a, fly: 0, cls: 1 } };
+const ML = () => MOUNTS.slice(0, 4).concat([CM[P.cls]], MOUNTS.slice(4));
 function mountMeshOld(d) {
     const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: d.col, emissive: d.cls ? d.col : 0, emissiveIntensity: .25 }), L = d.drake ? 3.2 : 2.4, bx = (w, h, l, x, y, z, p) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m); o.position.set(x, y, z); (p || g).add(o); o.castShadow = true; return o; };
     bx(1.1, 1, L, 0, 1.2, 0);
@@ -955,7 +1045,7 @@ function mountMeshOld(d) {
 }
 function jump() { if (G.cd > 0 || (DU && DU.cd > 0))
     return; if ((P.jy || 0) < .05) {
-    P.vy = P.mount ? 11 : 10.5;
+    P.vy = (P.mount ? 11 : 10.5) * (P.gum > 0 ? 1.25 : 1) * (P.bal > 0 ? 1.35 : 1);
     P.jy = .06;
 } }
 const css = c => '#' + c.toString(16).padStart(6, '0'), MT = {};
@@ -1192,9 +1282,11 @@ function mkBot(cls, team, x, z, idx) {
     fg.position.z = .01;
     S.add(grp);
     const mx = k.hp + 20 * (PVPL - 1);
-    return { bot: 1, ally: !team, team, cls, mesh, pos: mesh.position, hp: mx, max: mx, lvl: PVPL, name: cls[0].toUpperCase() + cls.slice(1) + (team ? ' (Enemy)' : ' (Ally)'), cd: rnd(0, 1), sw: 0, slow: 0, aggro: false, mv: 0, rng: ['mage', 'hunter', 'warlock', 'priest'].includes(cls), k: { warrior: 1.3, rogue: 1.7, paladin: 1.4, mage: 1.8, warlock: 1.7, hunter: 1.5, priest: 1.2 }[cls], bgp: grp, fg, id: idx, dead: false, rs: 0 };
+    return { bot: 1, ally: !team, team, cls, mesh, pos: mesh.position, hp: mx, max: mx, lvl: PVPL, name: CNAME(cls) + (team ? ' (Enemy)' : ' (Ally)'), cd: rnd(0, 1), sw: 0, slow: 0, aggro: false, mv: 0, rng: ['mage', 'hunter', 'warlock', 'priest', 'druid'].includes(cls), k: WB_K[cls] || 1.5, bgp: grp, fg, id: idx, dead: false, rs: 0 };
 }
 function foeHit(t, d, src) { if (G.cd > 0 || t.dead)
+    return; if (!(d >= 0)) d = 1; if (!(t.hp >= -1e9)) t.hp = t.max || 1; if (t === P && P.stealth)
+    stealthOff(); if (t === P && ADM.ignore && !G.on && !DU && !(src && (src.bot || src.wb)))
     return; if (t === P) {
     d = Math.max(1, Math.round(d * specT()));
     if (P.shield > 0) {
@@ -1230,6 +1322,8 @@ function botKill(b) { if (b.dead)
 function respawnBot(b) { const c = G.c; b.hp = b.max; b.dead = false; b.pos.set(c.x + (b.team ? 80 : -80), 0, c.z + (b.id - 2) * 4); b.mesh.scale.setScalar(1); b.mesh.rotation.set(0, b.team ? -Math.PI / 2 : Math.PI / 2, 0); S.add(b.mesh); if (!b.ally)
     mobs.push(b); b.bgp.visible = true; b.cd = 1; }
 function botAI(b, dt, t) {
+    if (!(b.hp >= -1e9))
+        b.hp = b.max;
     b.bgp.visible = !b.dead;
     b.bgp.position.set(b.pos.x, 3.6, b.pos.z);
     b.bgp.quaternion.copy(cam.quaternion);
@@ -1277,7 +1371,7 @@ function botAI(b, dt, t) {
                 else {
                     b.cd = b.rng ? 1.5 : 1;
                     if (b.rng) {
-                        const col = { mage: 0xff7711, warlock: 0x9933ff, hunter: 0xddddaa, priest: 0xffee99 }[b.cls], o = new THREE.Mesh(new THREE.SphereGeometry(b.cls == 'hunter' ? .18 : .33, 8, 8), new THREE.MeshBasicMaterial({ color: col }));
+                        const col = { mage: 0xff7711, warlock: 0x66e0ff, druid: 0x9dff6a, hunter: 0xddddaa, priest: 0xffee99 }[b.cls], o = new THREE.Mesh(new THREE.SphereGeometry(b.cls == 'hunter' ? .18 : .33, 8, 8), new THREE.MeshBasicMaterial({ color: col }));
                         o.position.copy(b.pos);
                         o.position.y += 2;
                         S.add(o);
@@ -1301,7 +1395,7 @@ function botAI(b, dt, t) {
     b.mesh.legs[1].rotation.x = -sw;
     b.mesh.arm.rotation.x = -sw * .8;
     b.sw = Math.max(0, b.sw - dt);
-    b.mesh.w.rotation.x = b.sw > 0 ? -Math.sin(b.sw / .3 * 3.14) * 1.8 : 0;
+    heroSwing(b.mesh, b.sw);
 }
 function pvpPlayerDown() { if (P.dead)
     return; P.dead = true; P.rs = 8; P.hp = 0; P.t = null; dismount(); P.cast = null; P.mesh.visible = false; burst(P.pos, 0xcc2222, 16); if (G.mode == 'bg' && !G.over)
@@ -1432,7 +1526,7 @@ function renderPvP() { const D = [['Easy', .6], ['Normal', 1], ['Hard', 1.4]]; $
 // ===== World adventurer bots (roam the starting zone, level up, duelable in town) =====
 let wbots = [], DU = null, duelRingM = null, selB = null;
 const WB_NAMES = ['Aldric', 'Brynn', 'Kael', 'Mira', 'Thorin', 'Lyra', 'Doran', 'Selene', 'Varek', 'Isolde', 'Fenn', 'Orla', 'Gareth', 'Nyx', 'Rurik', 'Tamsin'];
-const WB_K = { warrior: 1.3, rogue: 1.7, paladin: 1.4, mage: 1.8, warlock: 1.7, hunter: 1.5, priest: 1.2 };
+const WB_K = { warrior: 1.3, rogue: 1.7, paladin: 1.4, mage: 1.8, warlock: 1.7, hunter: 1.5, priest: 1.2, druid: 1.5 };
 const WB_HOME = [[-7, -3], [6, 0], [0, 11]];
 function wbLabelDraw(b) {
     const g = b.lc.getContext('2d'), pct = Math.max(0, b.hp / b.max);
@@ -1465,7 +1559,7 @@ function mkWB(cls, role, x, z, name, lvl) {
     sp.scale.set(4.4, 1.1, 1);
     S.add(sp);
     const mx = k.hp + 20 * (lvl - 1);
-    const b = { wb: 1, name, cls, role, mesh, pos: mesh.position, lvl, xp: 0, hp: mx, max: mx, cd: rnd(0, 1), sw: 0, slow: 0, mv: 0, aggro: false, dead: false, rs: 0, rng: ['mage', 'hunter', 'warlock', 'priest'].includes(cls), k: WB_K[cls], lc: c, lt, label: sp, tgt: null, wp: null, home: { x, z }, idle: rnd(1, 4), tr: 0, id: wbots.length, hc: 0, lk: '' };
+    const b = { wb: 1, name, cls, role, mesh, pos: mesh.position, lvl, xp: 0, hp: mx, max: mx, cd: rnd(0, 1), sw: 0, slow: 0, mv: 0, aggro: false, dead: false, rs: 0, rng: ['mage', 'hunter', 'warlock', 'priest', 'druid'].includes(cls), k: WB_K[cls], lc: c, lt, label: sp, tgt: null, wp: null, home: { x, z }, idle: rnd(1, 4), tr: 0, id: wbots.length, hc: 0, lk: '' };
     wbLabelDraw(b);
     wbots.push(b);
     return b;
@@ -1562,7 +1656,7 @@ function wbSwing(b, tg, dm, byMob) {
     b.sw = .3;
     b.cd = b.rng ? 1.5 : 1;
     if (b.rng) {
-        const col = { mage: 0xff7711, warlock: 0x9933ff, hunter: 0xddddaa, priest: 0xffee99 }[b.cls], o = new THREE.Mesh(new THREE.SphereGeometry(b.cls == 'hunter' ? .18 : .33, 8, 8), new THREE.MeshBasicMaterial({ color: col }));
+        const col = { mage: 0xff7711, warlock: 0x66e0ff, druid: 0x9dff6a, hunter: 0xddddaa, priest: 0xffee99 }[b.cls], o = new THREE.Mesh(new THREE.SphereGeometry(b.cls == 'hunter' ? .18 : .33, 8, 8), new THREE.MeshBasicMaterial({ color: col }));
         o.position.copy(b.pos);
         o.position.y += 2;
         S.add(o);
@@ -1719,7 +1813,7 @@ function wbTick(dt, t) {
         b.mesh.legs[0].rotation.x = sw;
         b.mesh.legs[1].rotation.x = -sw;
         b.mesh.arm.rotation.x = -sw * .8;
-        b.mesh.w.rotation.x = b.sw > 0 ? -Math.sin(b.sw / .3 * 3.14) * 1.8 : 0;
+        heroSwing(b.mesh, b.sw);
         b.label.position.set(b.pos.x, 3.7, b.pos.z);
         b.label.visible = d3(b, P) < 70;
         if (b.lk !== b.lvl + ':' + Math.round(Math.max(0, b.hp / b.max) * 20) + (b.pit ? 'p' : ''))
@@ -1847,7 +1941,7 @@ function renderBP() {
     const inT = Math.hypot(P.pos.x, P.pos.z) <= TOWN + 6 && Math.hypot(b.pos.x, b.pos.z) <= TOWN + 6, can = !DU && !G.on && !b.tgt && !b.dead;
     const st = DU && DU.b === b ? 'Dueling you' : b.pit ? 'Fighting in the Pit (PvP)' : b.tgt ? 'Fighting monsters' : b.role == 'town' ? 'Resting in town' : 'Adventuring';
     const hint = DU ? '' : !inT ? 'Duels are fought in town' : !can ? 'Busy right now' : '';
-    const s = `<b style="color:var(--gold)">${b.name}</b> · Lv ${b.lvl} ${b.cls[0].toUpperCase() + b.cls.slice(1)}<br><small>${st}</small><div class="bar"><i style="background:#c33;width:${Math.round(Math.max(0, b.hp / b.max) * 20) * 5}%"></i></div><div style="margin-top:6px">` + (can && inT ? `<button onclick="startDuel(selB)" style="padding:4px 12px;font-size:13px;margin:0 4px">⚔️ Duel</button><br><small style="opacity:.7">Levels don't count in duels</small>` : `<small style="opacity:.8">${hint}</small>`) + `<button onclick="closeBP()" style="padding:4px 10px;font-size:13px;margin:0 4px">✕</button></div>`;
+    const s = `<b style="color:var(--gold)">${b.name}</b> · Lv ${b.lvl} ${CNAME(b.cls)}<br><small>${st}</small><div class="bar"><i style="background:#c33;width:${Math.round(Math.max(0, b.hp / b.max) * 20) * 5}%"></i></div><div style="margin-top:6px">` + (can && inT ? `<button onclick="startDuel(selB)" style="padding:4px 12px;font-size:13px;margin:0 4px">⚔️ Duel</button><br><small style="opacity:.7">Levels don't count in duels</small>` : `<small style="opacity:.8">${hint}</small>`) + `<button onclick="closeBP()" style="padding:4px 10px;font-size:13px;margin:0 4px">✕</button></div>`;
     if (p.dataset.s !== s) {
         p.dataset.s = s;
         p.innerHTML = s;
@@ -1855,33 +1949,54 @@ function renderBP() {
 }
 
 // ===== Admin panel (R) =====
-const ADM = { regen: false, thorns: false, speed: false, hacc: 0 }, thornsQ = [];
+const ADM = { regen: false, thorns: false, speed: false, ignore: false, tp: false, hacc: 0 }, thornsQ = [];
 const ADM_B = [
-    ['regen', '❤️', 'Regeneration', '+20 HP every second', '#9a2a3a'],
-    ['thorns', '🌹', 'Thorns', 'Attackers take 20 damage', '#3a8a2a'],
-    ['speed', '⚡', 'Super Speed', '×2.5 movement speed', '#2a6fd6']
+    ['regen', '❤️', 'Regeneration', '+40% HP every second', '#9a2a3a'],
+    ['thorns', '🌹', 'Thorns', 'Attackers lose 40% of their HP', '#3a8a2a'],
+    ['speed', '⚡', 'Super Speed', '×2.5 movement speed', '#2a6fd6'],
+    ['ignore', '👻', 'Mobs Ignore Me', 'Monsters never attack you', '#5a3a8a'],
+    ['tp', '🌀', 'Map Teleport', 'Click map or minimap to go there', '#1a7a8a']
 ];
 function toggleAdm() { if (!running)
     return; const p = $('adm'); p.style.display = p.style.display == 'flex' ? 'none' : 'flex'; renderAdm(); }
 function admToggle(k) { ADM[k] = !ADM[k]; renderAdm(); const b = ADM_B.find(x => x[0] == k); say('<span style="color:#4fc3ff">[R] ' + b[2] + (ADM[k] ? ' enabled' : ' disabled') + '</span>'); }
-function admOff() { ADM.regen = ADM.thorns = ADM.speed = false; renderAdm(); say('<span style="color:#4fc3ff">[R] All buffs disabled</span>'); }
+function admLvl(n) {
+    if (!running || P.dead)
+        return;
+    P.lvl += n;
+    P.xp = 0;
+    P.max = maxHP(P.lvl);
+    P.mmax += 10 * n;
+    P.hp = P.max;
+    P.mp = P.mmax;
+    burst(P.pos, 0xffee55, 40, 2);
+    say('<b style="color:#ff6">[R] LEVEL UP! +' + n + ' — you are now level ' + P.lvl + '</b>');
+    saveHero();
+    renderAdm();
+}
+function admOff() { ADM.regen = ADM.thorns = ADM.speed = ADM.ignore = ADM.tp = false; renderAdm(); say('<span style="color:#4fc3ff">[R] All buffs disabled</span>'); }
 function renderAdm() {
-    $('adm').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4a9cff,#0b2a66);border:2px solid #e8b84a;color:#fff;font-weight:bold;font-size:17px;vertical-align:middle;margin-right:8px">R</span><b style="color:var(--gold);vertical-align:middle">Admin Panel — Buffs</b><span onclick="toggleAdm()" style="float:right;cursor:pointer">✕</span><div style="margin:10px 0;font-size:12px;opacity:.8">Click a buff to switch it on or off. R or Esc to close.</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${ADM_B.map(([k, e, n, d, c]) => `<div class="sl" onclick="admToggle('${k}')" style="cursor:pointer;width:150px;height:140px;background:radial-gradient(circle at 50% 35%,${c},#050505 85%);border-color:${ADM[k] ? '#fff' : '#7a5a22'};box-shadow:${ADM[k] ? '0 0 14px #4fc3ff' : 'none'}"><i class="ic" style="font-size:46px;top:10px">${e}</i><span style="font-size:13px;bottom:62px;background:none">${n}</span><em style="bottom:30px;color:#fff;font-size:11px">${d}</em><em style="bottom:6px;color:${ADM[k] ? '#6f6' : '#aaa'};font-size:12px">${ADM[k] ? '● ON' : '○ OFF'}</em></div>`).join('')}</div><div style="margin-top:12px"><button onclick="admOff()" style="padding:4px 14px;font-size:13px">Disable all</button></div></div>`;
+    $('adm').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#4a9cff,#0b2a66);border:2px solid #e8b84a;color:#fff;font-weight:bold;font-size:17px;vertical-align:middle;margin-right:8px">R</span><b style="color:var(--gold);vertical-align:middle">Admin Panel — Buffs</b><span onclick="toggleAdm()" style="float:right;cursor:pointer">✕</span><div style="margin:10px 0;font-size:12px;opacity:.8">Click a buff to switch it on or off. R or Esc to close.</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${ADM_B.map(([k, e, n, d, c]) => `<div class="sl" onclick="admToggle('${k}')" style="cursor:pointer;width:150px;height:140px;background:radial-gradient(circle at 50% 35%,${c},#050505 85%);border-color:${ADM[k] ? '#fff' : '#7a5a22'};box-shadow:${ADM[k] ? '0 0 14px #4fc3ff' : 'none'}"><i class="ic" style="font-size:46px;top:10px">${e}</i><span style="font-size:13px;bottom:62px;background:none">${n}</span><em style="bottom:30px;color:#fff;font-size:11px">${d}</em><em style="bottom:6px;color:${ADM[k] ? '#6f6' : '#aaa'};font-size:12px">${ADM[k] ? '● ON' : '○ OFF'}</em></div>`).join('')}</div><div style="margin-top:14px;padding-top:10px;border-top:1px solid #7a5a22"><b style="color:var(--gold)">⭐ Level Up</b> <small style="opacity:.8">(you are level ${P.lvl})</small><div style="margin-top:6px">${[1, 5, 10].map(n => `<button onclick="admLvl(${n})" style="padding:6px 16px;font-size:14px">+${n} level${n > 1 ? 's' : ''}</button>`).join('')}</div></div>${admConsoleHTML()}<div style="margin-top:12px"><button onclick="admMapTP()" style="padding:4px 14px;font-size:13px">🗺️ Open map to teleport</button><button onclick="admOff()" style="padding:4px 14px;font-size:13px">Disable all</button></div></div>`;
 }
 function admTick(dt, t) {
+    if (!(P.hp >= -1e9))
+        P.hp = P.max;
+    if (!(P.shield >= 0))
+        P.shield = 0;
     while (thornsQ.length) {
         const m = thornsQ.pop();
         if (mobs.indexOf(m) >= 0) {
             burst(m.pos, 0x55cc33, 6);
-            hit(m, 20);
+            hit(m, Math.max(1, Math.round((m.max || m.hp || 50) * .4)));
         }
     }
     if (ADM.regen && !P.dead && P.hp > 0 && P.hp < P.max) {
         ADM.hacc += dt;
         if (ADM.hacc >= 1) {
             ADM.hacc -= 1;
-            P.hp = Math.min(P.max, P.hp + 20);
-            float(P.pos, '+20', '#6f6');
+            const hh = Math.round(P.max * .4);
+            P.hp = Math.min(P.max, P.hp + hh);
+            float(P.pos, '+' + hh, '#6f6');
         }
     }
     const s = ADM_B.filter(b => ADM[b[0]]).map(b => b[1]).join(' '), bf = $('abf');
@@ -1921,7 +2036,7 @@ if (HEROES.length)
 function saveHero() {
     if (!P || !running || !CUR)
         return;
-    Object.assign(CUR, { lvl: P.lvl, xp: P.xp, gold: P.gold, gear: P.gear, qd: Q.done, sel: P.sel === undefined ? null : P.sel, z: [...zoneSeen], sp: P.spec || null, t: Date.now() });
+    Object.assign(CUR, { lvl: P.lvl, xp: P.xp, gold: P.gold, gear: P.gear, qd: Q.done, sel: P.sel === undefined ? null : P.sel, z: [...zoneSeen], sp: P.spec || null, pet: PET ? PET.i : null, t: Date.now() });
     persist();
 }
 function loadHero() {
@@ -1943,7 +2058,7 @@ function loadHero() {
         P.sel = sv.sel;
     zoneSeen = new Set(sv.z && sv.z.length ? sv.z : [0]);
     zoneSeen.add(0);
-    say(sv.t ? 'Welcome back, ' + esc(sv.name) + '! Level ' + P.lvl + ' ' + P.cls + ' restored.' : 'Welcome, ' + esc(sv.name) + '!');
+    say(sv.t ? 'Welcome back, ' + esc(sv.name) + '! Level ' + P.lvl + ' ' + CNAME(P.cls) + ' restored.' : 'Welcome, ' + esc(sv.name) + '!');
 }
 function saveTick(dt) { saveT += dt; if (saveT > 5) {
     saveT = 0;
@@ -1993,7 +2108,7 @@ function chooseClass(c) {
         nameHero(c, null);
 }
 function nameHero(c, sp) {
-    const K = c[0].toUpperCase() + c.slice(1), e = $('spec'), spj = sp ? `'${sp}'` : 'null';
+    const K = CNAME(c), e = $('spec'), spj = sp ? `'${sp}'` : 'null';
     e.innerHTML = `<h1 style="font-size:1.8rem">Name your ${K}</h1><input id="hname" maxlength="14" value="${esc(randName())}" style="font:inherit;font-size:1.3rem;padding:8px 14px;border-radius:6px;border:2px solid var(--gold);background:#1a1206;color:var(--fg);text-align:center" onkeydown="if(event.key=='Enter')createHero('${c}',${spj})"><div><button onclick="createHero('${c}',${spj})">✔ Create hero</button><button onclick="${SPECS[c] ? `pickSpec('${c}')` : `$('spec').style.display='none'`}">← Back</button></div>`;
     e.style.display = 'flex';
     setTimeout(() => { const i = $('hname'); if (i && i.focus) {
@@ -2084,7 +2199,7 @@ function csBuild() {
         stage.add(grp);
         SH.push({ h, grp, mesh, glow });
     });
-    $('csl').innerHTML = HEROES.map((h, i) => `<div class="hl" id="hl_${i}" onclick="csPick(${i})" ondblclick="csEnter()"><b>${esc(h.name)}</b><br><small>Lv ${h.lvl} ${h.cls[0].toUpperCase() + h.cls.slice(1)}${h.sp ? ' · ' + h.sp : ''}</small></div>`).join('');
+    $('csl').innerHTML = HEROES.map((h, i) => `<div class="hl" id="hl_${i}" onclick="csPick(${i})" ondblclick="csEnter()"><b>${esc(h.name)}</b><br><small>Lv ${h.lvl} ${CNAME(h.cls)}${h.sp ? ' · ' + h.sp : ''}</small></div>`).join('');
 }
 function showSelect() {
     $('menu').style.display = 'none';
@@ -2153,7 +2268,7 @@ function csDelete() {
     const list = HEROES.filter(h => DELSET.has(h.id));
     if (!list.length)
         return;
-    const names = list.map(h => esc(h.name) + ' (Lv ' + h.lvl + ' ' + h.cls + ')').join(', ');
+    const names = list.map(h => esc(h.name) + ' (Lv ' + h.lvl + ' ' + CNAME(h.cls) + ')').join(', ');
     askOK('Delete ' + (list.length > 1 ? list.length + ' heroes' : 'this hero') + '?<br><b>' + names + '</b>', () => askOK('⚠ Are you absolutely sure?<br>This cannot be undone.', () => {
         HEROES = HEROES.filter(h => !DELSET.has(h.id));
         if (CUR && DELSET.has(CUR.id))
@@ -2248,7 +2363,7 @@ function pvpStats(on) {
 }
 // ===== Warrior / Paladin stances: Melee (two-handed greatsword) or Tank (sword & shield) =====
 const maxHP = L => Math.round((CL[P.cls].hp + 20 * (L - 1)) * (P.spec == 'tank' ? 1.4 : 1));
-const specD = () => P.spec == 'melee' ? 1.25 : P.spec == 'tank' ? .85 : P.spec == 'damage' ? 1.2 : P.spec == 'heal' ? .9 : P.spec == 'summon' ? .85 : P.spec == 'curse' ? 1.1 : 1, specT = () => P.spec == 'tank' ? .7 : 1;
+const specD = () => P.spec == 'melee' ? 1.25 : P.spec == 'tank' ? .85 : P.spec == 'damage' ? 1.2 : P.spec == 'heal' ? .9 : P.spec == 'summon' ? .85 : P.spec == 'curse' ? 1.1 : 1, specT = () => (P.spec == 'tank' ? .7 : 1) * (P.lion ? .8 : 1);
 function limb(g, a, b, mat, th) {
     const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, len = Math.hypot(dx, dy, dz) || 1, m = new THREE.Mesh(new THREE.BoxGeometry(th, len, th), mat);
     m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
@@ -2313,7 +2428,7 @@ function applySpec(g, spec) {
     if (g.cls == 'priest' || g.cls == 'warlock') {
         if (g.orb) {
             const on = spec == 'damage' || spec == 'summon';
-            g.orb.material.color.setHex(g.cls == 'priest' ? (on ? 0xffcc22 : 0x88ffcc) : (on ? 0x66ff88 : 0xaa44ff));
+            g.orb.material.color.setHex(g.cls == 'priest' ? (on ? 0xffcc22 : 0x88ffcc) : (on ? 0x9dff9a : 0x7affe0));
             g.orb.scale.setScalar(on ? 1.5 : 1);
         }
         return;
@@ -2351,7 +2466,7 @@ CL.priest.abD = [
 ];
 let cfgOf = p => p.cls == 'priest' ? Object.assign({}, CL.priest, { ab: p.spec == 'damage' ? CL.priest.abD : CL.priest.abH }) : CL[p.cls];
 function buildHB() {
-    $('hb').innerHTML = P.cfg.ab.map((a, i) => { const ic = ICONS[a.n] || ['❓', '#444']; return `<div class="sl" title="${a.n}" style="background:radial-gradient(circle at 50% 35%,${ic[1]},#050505 85%)"><b>${i + 1}</b><i class="ic">${ic[0]}</i><span>${a.n}</span><em>${a.cost} mp</em><u></u></div>`; }).join('');
+    $('hb').innerHTML = P.cfg.ab.map((a, i) => { const ic = ICONS[a.n] || ['❓', '#444']; return `<div class="sl" title="${a.n} (${i + 1})" onclick="useAbil(${i})" style="cursor:pointer;background:radial-gradient(circle at 50% 35%,${ic[1]},#050505 85%)"><b>${i + 1}</b><i class="ic">${ic[0]}</i><span>${a.n}</span><em>${a.cost} mp</em><u></u></div>`; }).join('');
 }
 // ----- Holy Radiance: channelled yellow beam (like Mind Flay) -----
 let chBeam = null, chGlow = null;
@@ -2402,7 +2517,7 @@ function chanTick(dt, t) {
         endChan();
 }
 function pickSpec(c) {
-    const sv = null, K = c[0].toUpperCase() + c.slice(1), e = $('spec');
+    const sv = null, K = CNAME(c), e = $('spec');
     const card = ([sp, ic, n, d, col]) => `<div class="sl" onclick="nameHero('${c}','${sp}')" style="cursor:pointer;width:210px;height:180px;background:radial-gradient(circle at 50% 35%,${col},#050505 85%);border-color:${sv == sp ? '#fff' : '#e8b84a'}"><i class="ic" style="font-size:56px;top:12px">${ic}</i><span style="font-size:15px;bottom:84px;background:none">${n}${sv == sp ? ' ✔' : ''}</span><em style="bottom:8px;color:#fff;font-size:11px;white-space:normal;padding:0 8px;line-height:1.35">${d}</em></div>`;
     e.innerHTML = `<h1 style="font-size:1.8rem">${K} — choose your specialization</h1><div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">${SPECS[c].map(card).join('')}</div><button onclick="$('spec').style.display='none'">← Back</button>`;
     e.style.display = 'flex';
@@ -2411,7 +2526,7 @@ function showSpecPanel() {
     selB = null;
     const sp = P.spec, p = $('bp'), o = SPECS[P.cls], b = on => `padding:4px 12px;font-size:13px;margin:0 4px;${on ? 'border-color:#fff;background:#5a4318' : ''}`;
     p.dataset.s = '';
-    p.innerHTML = `<b style="color:var(--gold)">${P.cls[0].toUpperCase() + P.cls.slice(1)} — Specialization</b><div style="margin-top:6px">${o.map(x => `<button onclick="setSpec('${x[0]}')" style="${b(sp == x[0])}">${x[1]} ${x[2]}</button>`).join('')}<button onclick="closeBP()" style="padding:4px 10px;font-size:13px;margin:0 4px">✕</button></div><small style="opacity:.8">${o.find(x => x[0] == sp)[3].replace('<br>', ' · ')}</small>`;
+    p.innerHTML = `<b style="color:var(--gold)">${CNAME(P.cls)} — Specialization</b><div style="margin-top:6px">${o.map(x => `<button onclick="setSpec('${x[0]}')" style="${b(sp == x[0])}">${x[1]} ${x[2]}</button>`).join('')}<button onclick="closeBP()" style="padding:4px 10px;font-size:13px;margin:0 4px">✕</button></div><small style="opacity:.8">${o.find(x => x[0] == sp)[3].replace('<br>', ' · ')}</small>`;
     p.style.display = 'block';
 }
 function setSpec(sp) {
@@ -2438,45 +2553,63 @@ function setSpec(sp) {
 let GT = null, MX = -1, MY = -1, mins = [], volcs = [], gCur = null;
 const gRay = new THREE.Raycaster();
 addEventListener('mousemove', e => { MX = e.clientX; MY = e.clientY; });
-ICONS['Summon Imps'] = ['😈', '#8a2a6a'];
-ICONS['Summon Fiends'] = ['👹', '#5a1a4a'];
+ICONS['Summon Sprites'] = ['🧚', '#3aa0b0'];
+ICONS['Summon Guardians'] = ['🌳', '#3a7a3a'];
+ICONS['Spirit Bolt'] = ['💠', '#2a8aaa'];
+ICONS['Thorn Hex'] = ['🌿', '#3a8a2a'];
+ICONS['Life Bloom'] = ['🌸', '#c05a8a'];
+ICONS['Starburst'] = ['🌟', '#c9a02a'];
 ICONS['Volcano'] = ['🌋', '#d4541a'];
 ICONS['Sprint'] = ['💨', '#3a8ad0'];
 const WL = CL.warlock.ab;
 CL.warlock.abC = WL.slice();
 CL.warlock.abS = [
-    { n: 'Summon Imps', cost: 30, cd: 30, f: () => summonMinions(1, 4) },
-    { n: 'Summon Fiends', cost: 50, cd: 45, f: () => summonMinions(2, 6) },
+    { n: 'Summon Sprites', cost: 30, cd: 30, f: () => summonMinions(1, 4) },
+    { n: 'Summon Guardians', cost: 50, cd: 45, f: () => summonMinions(2, 4) },
     { n: 'Volcano', cost: 35, cd: 18, range: 36, rad: 9, ground: 1, f: pt => spawnVolcano(pt.x, pt.z, 9) },
     WL[2]
 ];
 SPECS.warlock = [
-    ['summon', '😈', 'Summoner', 'Imps &amp; Fiends fight for you<br>Volcano stun · Drain Life<br>−15% own damage', '#5a2a8a'],
-    ['curse', '🟣', 'Affliction', 'Shadow Bolt · Corruption<br>Drain Life · Hellfire<br>+10% damage', '#6a2a9a']
+    ['summon', '🧚', 'Summoner', 'Sprites &amp; Grove Guardians fight for you<br>Volcano stun · Life Bloom<br>Auto-attack spirit bolt<br>−15% own damage', '#2a7a8a'],
+    ['curse', '🌸', 'Spirit Magic', 'Spirit Bolt · Thorn Hex<br>Life Bloom · Starburst<br>+10% damage', '#2f9a86']
 ];
 const KITS = { priest: { damage: CL.priest.abD, heal: CL.priest.abH }, warlock: { summon: CL.warlock.abS, curse: CL.warlock.abC } };
 cfgOf = p => { const kit = KITS[p.cls]; return kit ? Object.assign({}, CL[p.cls], { ab: kit[p.spec] || CL[p.cls].ab }) : CL[p.cls]; };
 // ----- minions -----
 function mkMinion(tier, x, z, idx) {
-    const big = tier == 2, s = big ? 1.05 : .72, g = new THREE.Group(), L = c => new THREE.MeshLambertMaterial({ color: c, emissive: big ? 0x1a0620 : 0x330808 }), B = c => new THREE.MeshBasicMaterial({ color: c });
-    const bodyC = big ? 0x5a1a6a : 0xb02a2a, bm = L(bodyC);
-    const body = add(new THREE.Mesh(new THREE.SphereGeometry(.5, 10, 8), bm), 0, .95, 0, g);
-    body.scale.set(1, 1.2, .9);
-    add(new THREE.Mesh(new THREE.SphereGeometry(.38, 10, 8), bm), 0, 1.75, 0, g);
-    [-1, 1].forEach(sd => {
-        add(new THREE.Mesh(new THREE.ConeGeometry(.09, .4, 5), L(0x221111)), sd * .22, 2.15, 0, g).rotation.z = -sd * .35;
-        add(new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 6), B(big ? 0x66ff66 : 0xffee33)), sd * .14, 1.8, .32, g);
-        add(new THREE.Mesh(new THREE.BoxGeometry(.18, .7, .18), bm), sd * .62, 1.0, .1, g).rotation.z = sd * .3;
-    });
-    const tail = add(new THREE.Mesh(new THREE.ConeGeometry(.1, .9, 5), bm), 0, .6, -.55, g);
-    tail.rotation.x = -2;
-    g.legs = [-1, 1].map(sd => { const l = new THREE.Group(); l.position.set(sd * .22, .55, 0); add(new THREE.Mesh(new THREE.BoxGeometry(.2, .55, .2), bm), 0, -.27, 0, l); g.add(l); return l; });
+    const big = tier == 2, s = big ? 1.05 : .72, g = new THREE.Group(), L = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0 }), B = c => new THREE.MeshBasicMaterial({ color: c });
+    const eyes = (y, z, sx, r) => [-1, 1].forEach(sd => { add(new THREE.Mesh(new THREE.SphereGeometry(r, 8, 8), B(0x1a1a22)), sd * sx, y, z, g); add(new THREE.Mesh(new THREE.SphereGeometry(r * .35, 6, 6), B(0xffffff)), sd * sx - r * .3, y + r * .35, z + r * .7, g); });
     if (!big) {
-        g.wings = [-1, 1].map(sd => { const w = new THREE.Group(); w.position.set(sd * .3, 1.3, -.3); add(new THREE.Mesh(new THREE.BoxGeometry(.9, .04, .6), L(0x6a1a1a)), sd * .45, 0, 0, w); g.add(w); return w; });
+        // Sprite: a glowing little fairy with butterfly wings
+        const bm = L(0x9affea, 0x2a8a7a);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.42, 12, 10), bm), 0, 1.45, 0, g);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.28, 10, 8), bm), 0, .9, 0, g).scale.set(1, 1.2, 1);
+        eyes(1.5, .34, .15, .085);
+        add(new THREE.Mesh(new THREE.TorusGeometry(.08, .02, 4, 10, Math.PI), B(0x2a5a5a)), 0, 1.32, .38, g).rotation.z = Math.PI;
+        [-1, 1].forEach(sd => { add(new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 6), B(0xff9ac8)), sd * .26, 1.36, .3, g); const an = add(new THREE.Mesh(new THREE.CylinderGeometry(.015, .015, .35, 4), L(0x2a5a5a)), sd * .12, 1.95, 0, g); an.rotation.z = -sd * .3; add(new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 6), B(0xffe48a)), sd * .18, 2.12, 0, g); });
+        const wm = new THREE.MeshBasicMaterial({ color: 0xd8f8ff, transparent: true, opacity: .6, side: 2 });
+        g.wings = [-1, 1].map(sd => { const w = new THREE.Group(); w.position.set(sd * .15, 1.15, -.25); add(new THREE.Mesh(new THREE.CircleGeometry(.45, 12), wm), sd * .4, .2, 0, w).rotation.y = PI / 2 - .2; add(new THREE.Mesh(new THREE.CircleGeometry(.3, 10), wm), sd * .3, -.25, 0, w).rotation.y = PI / 2 - .2; g.add(w); return w; });
+        g.legs = [-1, 1].map(sd => { const l = new THREE.Group(); l.position.set(sd * .12, .62, 0); add(new THREE.Mesh(new THREE.SphereGeometry(.08, 6, 6), bm), 0, -.06, 0, l); g.add(l); return l; });
     }
     else {
-        for (let i = 0; i < 4; i++)
-            add(new THREE.Mesh(new THREE.ConeGeometry(.09, .3, 4), L(0x2a0a30)), 0, 1.5 - i * .02, -.38 - i * .05, g).rotation.x = -1 - i * .15;
+        // Grove Guardian: a round, mossy forest bear with a flower on its head
+        const fur = L(0x6a8a3a), bark = L(0x7a5a32), belly = L(0xc8d890);
+        const body = add(new THREE.Mesh(new THREE.SphereGeometry(.62, 12, 10), fur), 0, 1.0, 0, g);
+        body.scale.set(1, 1.1, .95);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.42, 10, 8), belly), 0, .95, .28, g).scale.set(1, 1.1, .6);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.44, 12, 10), fur), 0, 1.9, .05, g);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.18, 8, 6), belly), 0, 1.8, .4, g).scale.set(1.2, .8, .8);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 6), B(0x2a1a10)), 0, 1.86, .54, g);
+        eyes(2.0, .38, .17, .07);
+        [-1, 1].forEach(sd => {
+            add(new THREE.Mesh(new THREE.SphereGeometry(.14, 8, 6), fur), sd * .32, 2.28, 0, g);
+            add(new THREE.Mesh(new THREE.BoxGeometry(.24, .62, .24), bark), sd * .66, 1.05, .1, g).rotation.z = sd * .25;
+            add(new THREE.Mesh(new THREE.SphereGeometry(.12, 6, 5), L(0x4aa83a)), sd * .4, 1.3, -.4, g);
+        });
+        for (let k = 0; k < 5; k++)
+            add(new THREE.Mesh(new THREE.SphereGeometry(.1, 6, 6), B(k == 2 ? 0xffd23a : 0xff8fc8)), k == 2 ? 0 : Math.cos(k * 1.57) * .12, 2.42, k == 2 ? 0 : Math.sin(k * 1.57) * .12, g);
+        add(new THREE.Mesh(new THREE.ConeGeometry(.12, .3, 5), L(0x4aa83a)), .15, 2.4, -.1, g).rotation.z = -.6;
+        g.legs = [-1, 1].map(sd => { const l = new THREE.Group(); l.position.set(sd * .28, .55, 0); add(new THREE.Mesh(new THREE.BoxGeometry(.26, .5, .26), bark), 0, -.25, 0, l); g.add(l); return l; });
     }
     g.scale.setScalar(s);
     g.position.set(x, 0, z);
@@ -2500,8 +2633,8 @@ function summonMinions(tier, n) {
         mins.push(mkMinion(tier, x, z, i));
         burst(new THREE.Vector3(x, 0, z), tier == 2 ? 0x66ff66 : 0xff5555, 8, 1.5, .2);
     }
-    burst(P.pos, 0x9a44ff, 16, 1.4);
-    say('<span style="color:#c49aff">' + (tier == 2 ? 'Fiends' : 'Imps') + ' rise to fight for you!</span>');
+    burst(P.pos, 0x9affea, 16, 1.4);
+    say('<span style="color:#9affea">' + (tier == 2 ? '🌳 Grove Guardians' : '🧚 Sprites') + ' come to help you!</span>');
 }
 function mnDie(b, quiet) {
     if (b.dead)
@@ -2782,7 +2915,7 @@ function wbPitHurt(t, d, src) {
 }
 function pitFoes(b) {
     const a = wbots.filter(o => o !== b && o.pit && !o.dead && groundH(o.pos.x, o.pos.z) < -.6);
-    if (P.pit && !P.dead && groundH(P.pos.x, P.pos.z) < -.6)
+    if (P.pit && !P.dead && !P.stealth && groundH(P.pos.x, P.pos.z) < -.6)
         a.push(P);
     return a;
 }
@@ -3360,6 +3493,8 @@ const MS2 = {
     'Brown Horse': { fam: 'horse', t: 'fur', mane: 0x20120a, blaze: 1, ride: 1.62 },
     'Golden Charger': { fam: 'horse', t: 'armor', mane: 0xfff2b0, armor: 1, ride: 1.62 },
     'Hellsteed': { fam: 'horse', t: 'lava', mane: 0xff5a1a, flame: 1, horns: 1, eye: 0xffee33, ride: 1.62 },
+    'Spirit Steed': { fam: 'horse', t: 'sparkle', mane: 0xffffff, ride: 1.62 },
+    'Forest Stag': { fam: 'horse', t: 'fur', mane: 0x3a2a14, ride: 1.62 },
     'Arcane Unicorn': { fam: 'horse', t: 'sparkle', mane: 0xff7aff, horn: 1, wing: 1, ride: 1.62 }
 };
 function mhHorse(g, root, d, s, mats, refs) {
@@ -3756,6 +3891,10 @@ function MOUNTANIM(dt, t) {
     warTick(dt, t);
     pitTick(dt, t);
     dgTick(dt, t);
+    petTick(dt, t);
+    lionTick(dt, t);
+    admBossTick(dt, t);
+    toyTick(dt, t);
     if (P.cast) {
         if (P.mv) {
             P.cast = null;
@@ -3775,21 +3914,24 @@ function MOUNTANIM(dt, t) {
         $('cbi').style.width = (1 - P.cast.t / P.cast.max) * 100 + '%';
     const ty = P.mm ? P.mm.ride + (P.mount.fly ? 4 + Math.sin(t * 3) * .3 : 0) : 0;
     P.by = (P.by || 0) + (ty - (P.by || 0)) * Math.min(1, dt * 5);
+    jcTick(dt, t);
+    jcGround();
     const was = P.jy || 0;
-    P.vy = (P.vy || 0) - 28 * dt;
+    P.vy = (P.vy || 0) - 28 * dt * (P.bal > 0 && P.vy < 0 ? .25 : 1);
     P.jy = Math.max(0, was + P.vy * dt);
     if (P.jy === 0 && P.vy < 0)
         P.vy = 0;
     if (was > .05 && P.jy === 0)
-        burst(new THREE.Vector3(P.pos.x, 0, P.pos.z), 0xc8b890, 7, .3, .1);
-    P.pos.y = P.by + P.jy + groundH(P.pos.x, P.pos.z);
+        burst(new THREE.Vector3(P.pos.x, P.gl || 0, P.pos.z), P.onP ? 0xe8d8a8 : 0xc8b890, 7, .3, .1);
+    P.pos.y = P.by + P.jy + (P.gl === undefined ? groundH(P.pos.x, P.pos.z) : P.gl);
     if (P.mm) {
         P.mm.anim(t, P.mv, P.jy > .05);
         P.mesh.legs[0].rotation.set(-.35, 0, -.5);
         P.mesh.legs[1].rotation.set(-.35, 0, .5);
     }
 }
-function startCast(i) { if (DG.on)
+function startCast(i) { if (JR.on)
+    return say('You cannot mount during the Jump Challenge.'); if (DG.on)
     return say('You cannot mount inside the dungeon.'); if (P.mount)
     dismount(); const d = ML()[i]; if (mobs.some(m => m.aggro && d3(m, P) < 45))
     return say('You cannot mount while in combat!'); P.cast = { i, t: 1.2, max: 1.2 }; say('Summoning ' + d.n + '...'); }
@@ -3799,19 +3941,19 @@ function mountToggle() { if (P.mount)
     return say('Summon cancelled.');
 } let i = P.sel; if (i === undefined)
     i = 0; startCast(i); }
-function doMount(i) { const d = ML()[i]; P.mount = d; P.mm = mountMesh(d); P.mm.position.y = -P.mm.ride; P.mesh.add(P.mm); P.sel = i; burst(P.pos, 0xffffff, 16, 1); say('Mounted: ' + d.n + ' (H to dismount, abilities disabled)'); }
+function doMount(i) { if (P.stealth) stealthOff(); if (P.lion) lionToggle(); const d = ML()[i]; P.mount = d; P.mm = mountMesh(d); P.mm.position.y = -P.mm.ride; P.mesh.add(P.mm); P.sel = i; burst(P.pos, 0xffffff, 16, 1); say('Mounted: ' + d.n + ' (H to dismount, abilities disabled)'); }
 function dismount() { if (!P || !P.mount)
     return; P.mesh.legs.forEach(l => l.rotation.set(0, 0, 0)); P.mesh.remove(P.mm); P.mm = null; P.mount = null; say('Dismounted.'); }
 function toggleBook() { const b = $('mb'); b.style.display = b.style.display == 'flex' ? 'none' : 'flex'; renderBook(); }
 function renderBookOld() { $('mb').innerHTML = '<b style="color:var(--gold)">Mounts</b> <small>click to summon · H mount/dismount · B close</small>' + MOUNTS.map((d, i) => { const ok = P.lvl >= d.lvl; return `<div onclick="pickMount(${i})" style="margin-top:6px;padding:6px;border:1px solid ${P.sel === i ? '#e8b84a' : '#555'};border-radius:5px;opacity:${ok ? 1 : .45};cursor:${ok ? 'pointer' : 'default'}">${d.e} <b>${d.n}</b> — speed ×${d.sp}${d.fly ? ' · flying (mobs ignore you)' : ''}<br><small>${ok ? 'Unlocked' : 'Unlocks at level ' + d.lvl}</small></div>`; }).join(''); }
-function renderBook() { const L = ML(); $('mb').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><b style="color:var(--gold)">🐴 Mounts</b><span onclick="toggleBook()" style="float:right;cursor:pointer">✕</span><div style="margin:8px 0 12px;font-size:12px;opacity:.8">Click a mount to summon it · H mount/dismount · P or Esc to close</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${L.map((d, i) => `<div class="sl" onclick="pickMount(${i})" style="cursor:pointer;width:100px;height:122px;background:radial-gradient(circle at 50% 35%,#${d.col.toString(16).padStart(6, '0')},#050505 85%);border-color:${P.sel === i ? '#fff' : d.cls ? '#e8b84a' : '#7a5a22'}"><i class="ic" style="font-size:46px;top:10px">${d.e}</i><span style="font-size:11px;bottom:38px">${d.n}</span><em style="bottom:22px;color:#fff">×${d.sp} speed</em><em style="color:#8cf">${d.fly ? 'Flying' : 'Ground'}${d.cls ? ' · ⭐ Class' : ''}</em></div>`).join('')}</div></div>`; }
+function renderBook() { const L = ML(); $('mb').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><b style="color:var(--gold)">🐴 Mounts</b><span onclick="toggleBook()" style="float:right;cursor:pointer">✕</span><div style="margin:8px 0 12px;font-size:12px;opacity:.8">Click a mount to summon it · H mount/dismount · P or Esc to close</div><div style="display:grid;grid-template-columns:repeat(3,110px);gap:10px;justify-content:center">${L.map((d, i) => `<div class="sl" onclick="pickMount(${i})" style="cursor:pointer;width:110px;height:122px;background:radial-gradient(circle at 50% 35%,#${d.col.toString(16).padStart(6, '0')},#050505 85%);border-color:${P.sel === i ? '#fff' : d.cls ? '#e8b84a' : '#7a5a22'}"><i class="ic" style="font-size:46px;top:10px">${d.e}</i><span style="font-size:11px;bottom:38px">${d.n}</span><em style="bottom:22px;color:#fff">×${d.sp} speed</em><em style="color:#8cf">${d.fly ? 'Flying' : 'Ground'}${d.cls ? ' · ⭐ Class' : ''}</em></div>`).join('')}</div></div>`; }
 function pickMount(i) { P.sel = i; $('mb').style.display = 'none'; startCast(i); }
 function togglePause() { if (!running)
     return; if (GT)
     return cancelGround(); if (mapOpen)
     return toggleMap(); if ($('mb').style.display == 'flex')
     return toggleBook(); if ($('pv').style.display == 'flex')
-    return togglePvP(); if ($('dgw').style.display == 'flex') return toggleDg(); if ($('adm').style.display == 'flex') return toggleAdm(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
+    return togglePvP(); if ($('petw').style.display == 'flex') return togglePets(); if ($('toyw').style.display == 'flex') return toggleToys(); if ($('dgw').style.display == 'flex') return toggleDg(); if ($('adm').style.display == 'flex') return toggleAdm(); if ($('bp').style.display == 'block') return closeBP(); paused = !paused; clearKeys(); $('pause').style.display = paused ? 'flex' : 'none'; }
 function toggleMap() { if (!running)
     return; if (DG.on)
     return say('The map is unavailable inside the dungeon.'); mapOpen = !mapOpen; $('map').style.display = mapOpen ? 'flex' : 'none'; if (mapOpen)
@@ -3824,6 +3966,15 @@ function toMenu() {
     dismissMinions();
     cancelGround(true);
     saveHero();
+    petClear();
+    removePinata(true);
+    gumEnd(true);
+    admZones.forEach(z => S.remove(z.g));
+    admZones = [];
+    stealthOff(true);
+    toyCleanup();
+    jcReset();
+    toyCD = {};
     wbClear();
     if (G.on)
         leaveMatch(1);
@@ -3831,7 +3982,7 @@ function toMenu() {
     paused = false;
     mapOpen = false;
     window.SP = 0;
-    ['pause', 'map', 'mb', 'cb', 'adm'].forEach(i => $(i).style.display = 'none');
+    ['pause', 'map', 'mb', 'cb', 'adm', 'petw', 'toyw', 'toyb'].forEach(i => $(i).style.display = 'none');
     clearKeys();
     S.remove(P.mesh);
     mobs.forEach(m => S.remove(m.mesh));
@@ -3908,6 +4059,13 @@ function drawMap() {
     g.fillStyle = '#ff7a7a';
     g.font = 'bold 11px Georgia';
     g.fillText('⚔ The Pit (PvP)', X(ARENA.x) - 38, Z(ARENA.z) + 4);
+    g.strokeStyle = '#7be04a';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(X(JC.x), Z(JC.z), 13 * K, 0, 6.3);
+    g.stroke();
+    g.fillStyle = '#9dff7a';
+    g.fillText('🦘 Jump Challenge', X(JC.x) - 44, Z(JC.z) + 4);
     wbots.forEach(b => { if (b.dead) return; g.fillStyle = b.role == 'town' ? '#ffe48a' : '#4fc3ff'; g.beginPath(); g.arc(X(b.pos.x), Z(b.pos.z), 3.5, 0, 6.3); g.fill(); g.strokeStyle = '#000'; g.lineWidth = 1; g.stroke(); });
     mobs.forEach(m => { g.fillStyle = 'hsl(' + Math.max(0, 120 - m.lvl * 18) + ',80%,50%)'; g.fillRect(X(m.pos.x) - 2, Z(m.pos.z) - 2, 4, 4); });
     g.save();
@@ -3999,7 +4157,7 @@ function start(c, spec) {
         stage.visible = false;
     setMenuMode(false);
     const k = CL[c];
-    P = { cls: c, cfg: k, hp: k.hp, max: k.hp, mp: k.mp, mmax: k.mp, lvl: 1, xp: 0, gold: 0, gear: 0, t: null, cds: [0, 0, 0, 0], sw: 0 };
+    P = { cls: c, cfg: k, hp: k.hp, max: k.hp, mp: k.mp, mmax: k.mp, lvl: 1, xp: 0, gold: 0, gear: 0, t: null, cds: [0, 0, 0, 0, 0], sw: 0 };
     if (SPECS[c])
         P.spec = spec || (CUR && CUR.sp) || SPECS[c][1][0];
     P.cfg = cfgOf(P);
@@ -4018,6 +4176,9 @@ function start(c, spec) {
     zoneSeen = new Set([0]);
     Q = { need: 5, have: 0, on: false, done: 0 };
     loadHero();
+    petClear();
+    if (CUR && CUR.pet !== null && CUR.pet !== undefined)
+        summonPet(CUR.pet, true);
     buildHB();
     say('Welcome, hero! Speak to the Elder (the golden gem) in town.');
     running = true;
@@ -4029,6 +4190,8 @@ function start(c, spec) {
 }
 function useAbil(i) {
     const a = P.cfg.ab[i];
+    if (!a)
+        return;
     if (GT && GT.i !== i)
         cancelGround(true);
     if (P.dead || G.cd > 0 || (DU && DU.cd > 0))
@@ -4058,16 +4221,21 @@ function useAbil(i) {
     P.sw = .3;
     if (P.t)
         P.mesh.rotation.y = Math.atan2(P.t.pos.x - P.pos.x, P.t.pos.z - P.pos.z);
+    if (P.stealth && !a.stealth) {
+        stealthOff(true);
+        P.amb = 1;
+        float(P.pos, 'Ambush!', '#c9b0ff');
+    }
     a.f();
 }
-function tab() { let b = null, bd = 35; mobs.forEach(m => { const d = d3(m, P); if (d < bd && m !== P.t) {
+function tab() { let b = null, bd = 35; mobs.forEach(m => { const d = d3(m, P); if (d < bd && m !== P.t && m.adm != 'friendly') {
     bd = d;
     b = m;
 } }); P.t = b; }
 const KN = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', ArrowUp: 'arrowup', ArrowDown: 'arrowdown', ArrowLeft: 'arrowleft', ArrowRight: 'arrowright' };
 const clearKeys = () => { for (const k in keys)
     keys[k] = 0; };
-addEventListener('keydown', e => { const n = KN[e.code]; if (n) {
+addEventListener('keydown', e => { if (e.target && (e.target.tagName == 'INPUT' || e.target.tagName == 'TEXTAREA') && e.target.id == 'admc') return; const n = KN[e.code]; if (n) {
     keys[n] = 1;
     if (n.startsWith('arrow'))
         e.preventDefault();
@@ -4102,7 +4270,13 @@ addEventListener('keydown', e => { const n = KN[e.code]; if (n) {
 } if (e.code == 'KeyO') {
     togglePvP();
     return;
-} const dg = e.code.startsWith('Digit') ? +e.code.slice(5) : 0; if (dg >= 1 && dg <= 4)
+} if (e.code == 'KeyK') {
+    togglePets();
+    return;
+} if (e.code == 'KeyT') {
+    toggleToys();
+    return;
+} const dg = e.code.startsWith('Digit') ? +e.code.slice(5) : e.code.startsWith('Numpad') ? +e.code.slice(6) || 0 : 0; if (dg >= 1 && dg <= P.cfg.ab.length)
     useAbil(dg - 1); if (e.key == 'Tab') {
     e.preventDefault();
     tab();
@@ -4144,6 +4318,8 @@ el.onclick = e => {
     }
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), cam);
+    if (PIN && ray.intersectObject(PIN.body, true).length)
+        return hitPinata();
     const hits = ray.intersectObjects([npc, ...mobs.map(m => m.mesh), ...wbots.filter(b => !b.dead).map(b => b.mesh), ...(P.spec && !P.dead ? [P.mesh] : [])], true);
     if (!hits.length)
         return;
@@ -4187,7 +4363,7 @@ function update(dt, t) {
     const frozen = G.cd > 0 || (DU && DU.cd > 0), mv = v.lengthSq() > 0 && !P.dead && !frozen;
     if (mv) {
         v.normalize();
-        P.pos.addScaledVector(v, 9 * dt * (P.mount ? P.mount.sp : 1) * (ADM.speed ? 2.5 : 1) * (P.sprint > 0 ? 1.7 : 1) * (P.slowT > 0 ? .5 : 1));
+        P.pos.addScaledVector(v, 9 * dt * (P.lion ? 1.3 : 1) * (P.mount ? P.mount.sp : 1) * (ADM.speed ? 2.5 : 1) * (P.sprint > 0 ? 1.7 : 1) * (P.slowT > 0 ? .5 : 1) * (P.gum > 0 ? 1.15 : 1));
         P.mesh.rotation.y = Math.atan2(v.x, v.z);
     }
     if (G.on) {
@@ -4225,8 +4401,14 @@ function update(dt, t) {
         }
     }
     P.sw = Math.max(0, P.sw - dt);
-    P.mesh.w.rotation.x = P.sw > 0 ? -Math.sin(P.sw / .3 * 3.14) * 1.8 : 0;
-    P.cds = P.cds.map(c => Math.max(0, c - dt));
+    heroSwing(P.mesh, P.sw);
+    P.cds = P.cds.map(c => Math.max(0, (c || 0) - dt));
+    // Summoner auto-attack: small shadow bolt every 1.8s at an in-combat target within 28 range
+    P.aa = Math.max(0, (P.aa || 0) - dt);
+    if (P.cls == 'warlock' && P.spec == 'summon' && P.aa <= 0 && !P.dead && !P.mount && P.t && mobs.indexOf(P.t) >= 0 && P.t.hp > 0 && (P.t.aggro || G.on || DU) && d3(P.t, P) <= 28 && !(G.cd > 0 || (DU && DU.cd > 0))) {
+        P.aa = 1.8;
+        shot(0x66e0ff, dmg(.55), null, .2);
+    }
     P.mp = Math.min(P.mmax, P.mp + P.cfg.regen * dt);
     const town = Math.hypot(P.pos.x, P.pos.z) < TOWN;
     if (town)
@@ -4237,7 +4419,7 @@ function update(dt, t) {
     mark.visible = true;
     mark.material.color.set(Q.on ? 0x66ccff : 0xffdd33);
     mobs.forEach(m => {
-        if (m.wb)
+        if (m.wb || m.adm)
             return;
         if (!m.bot && m.stun > 0) {
             m.stun -= dt;
@@ -4272,7 +4454,7 @@ function update(dt, t) {
                 }
             }
         }
-        else if (!town && ((d < 17 && !(P.mount && P.mount.fly)) || m.aggro) && d < 55) {
+        else if (!town && !ADM.ignore && !P.stealth && ((d < 17 && !(P.mount && P.mount.fly)) || m.aggro) && d < 55) {
             if (d > (m.rng || 2.6))
                 go(P.pos.x, P.pos.z, (5 + m.lvl * .35) * (m.slow > 0 ? .4 : 1) * (m.spd || 1));
             else {
@@ -4395,7 +4577,7 @@ function update(dt, t) {
 }
 function hud() {
     const pc = (v, m) => Math.max(0, v / m * 100) + '%';
-    $('pf').innerHTML = `<b>${esc(P.name || P.cls)}</b> <small>${P.cls}${P.spec ? ' · ' + P.spec : ''}</small> Lv ${P.lvl} &nbsp; ★${P.gear} &nbsp; <span style="color:var(--gold)">${P.gold}g</span><div class="bar"><i style="background:#c33;width:${pc(P.hp, P.max)}"></i></div><div class="bar" style="height:10px"><i style="background:#38c;width:${pc(P.mp, P.mmax)}"></i></div><div class="bar" style="height:6px"><i style="background:#a5c;width:${pc(P.xp, xpN())}"></i></div>`;
+    $('pf').innerHTML = `<b>${esc(P.name || P.cls)}</b> <small>${CNAME(P.cls)}${P.lion ? ' · 🦁 lion' : P.spec ? ' · ' + P.spec : ''}</small> Lv ${P.lvl} &nbsp; ★${P.gear} &nbsp; <span style="color:var(--gold)">${P.gold}g</span><div class="bar"><i style="background:#c33;width:${pc(P.hp, P.max)}"></i></div><div class="bar" style="height:10px"><i style="background:#38c;width:${pc(P.mp, P.mmax)}"></i></div><div class="bar" style="height:6px"><i style="background:#a5c;width:${pc(P.xp, xpN())}"></i></div>`;
     const tf = $('tf');
     if (P.t) {
         tf.style.display = 'block';
@@ -4404,7 +4586,7 @@ function hud() {
     else
         tf.style.display = 'none';
     $('qt').innerHTML = `<b style="color:var(--gold)">Quest</b><br>${Q.on ? `Slay beasts: ${Q.have}/${Q.need}` : 'None — talk to the Elder'}<br><small>${Math.hypot(P.pos.x, P.pos.z) < TOWN ? 'Safe zone' : (G.on ? 'Arena' : DG.on ? '🏰 ' + DG.name : ZONES[zoneAt(P.pos.x, P.pos.z)].e + ' ' + ZONES[zoneAt(P.pos.x, P.pos.z)].n + (P.pit ? ' · ⚔ PvP' : ''))}</small>`;
-    [...$('hb').children].forEach((s, i) => { const u = s.querySelector('u'), a = P.cfg.ab[i]; u.style.height = P.cds[i] > 0 ? (P.cds[i] / a.cd * 100) + '%' : '0'; u.textContent = P.cds[i] > 0 ? P.cds[i].toFixed(1) : ''; s.style.borderColor = P.mp >= a.cost ? '#e8b84a' : '#555'; });
+    [...$('hb').children].forEach((s, i) => { const u = s.querySelector('u'), a = P.cfg.ab[i]; u.style.height = P.cds[i] > 0 ? (P.cds[i] / a.cd * 100) + '%' : '0'; u.textContent = P.cds[i] > 0 ? P.cds[i].toFixed(1) : ''; s.style.borderColor = a.stealth && P.stealth ? '#fff' : P.mp >= a.cost ? '#e8b84a' : '#555'; s.style.boxShadow = a.stealth && P.stealth ? '0 0 12px #b08aff' : ''; });
     const c = $('mm').getContext('2d'), k = .9;
     c.clearRect(0, 0, 120, 120);
     c.fillStyle = ZONES[G.on ? 0 : zoneAt(P.pos.x, P.pos.z)].mm;
@@ -4426,4 +4608,1407 @@ function hud() {
     c.beginPath();
     c.arc(60, 60, 3.5, 0, 6.3);
     c.fill();
+}
+
+// ===== Pets: small companions that follow you and nip at enemies you fight =====
+const PETS = [
+    { n: 'Bear Cub', e: '🐻', lvl: 1, col: 0x6b4423, col2: 0xc49a6c, ear: 'round', tail: 'stub', s: .8, pw: 1, d: 'A clumsy little cub. Loves honey and fights.' },
+    { n: 'Fox Kit', e: '🦊', lvl: 3, col: 0xd9661e, col2: 0xffffff, ear: 'point', tail: 'bushy', long: 1, s: .7, pw: 1, d: 'Quick and sly, always one step behind you.' },
+    { n: 'Snow Cub', e: '🐻‍❄️', lvl: 5, col: 0xf2f2ee, col2: 0xd8d4c8, ear: 'round', tail: 'stub', s: .85, pw: 1.15, d: 'A polar cub from Frostpeak Tundra.' },
+    { n: 'Baby Owl', e: '🦉', lvl: 7, col: 0x8a6a44, col2: 0xe8d8b0, ear: 'tuft', beak: 1, wings: 1, fly: 1, s: .65, pw: 1.1, d: 'Hovers by your shoulder and swoops at foes.' },
+    { n: 'Wolf Pup', e: '🐺', lvl: 10, col: 0x6e7278, col2: 0xcfcfcf, ear: 'point', tail: 'bushy', long: 1, s: .85, pw: 1.3, d: 'Fierce for its size. Bites hard.' },
+    { n: 'Ember Whelp', e: '🐉', lvl: 14, col: 0xc0301a, col2: 0xffb347, ear: 'horn', tail: 'long', long: 1, wings: 1, fly: 1, s: .75, pw: 1.5, d: 'A baby dragon. Its bite burns.' }
+];
+let PET = null;
+function petMesh(d) {
+    const g = new THREE.Group(), body = new THREE.Group(), m = M(d.col), m2 = M(d.col2), k = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    g.add(body);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.45, 12, 10), m), 0, .6, 0, body).scale.set(1, .9, 1.25);
+    if (d.beak || d.col2 == 0xffffff)
+        add(new THREE.Mesh(new THREE.SphereGeometry(.32, 10, 8), m2), 0, .55, .22, body).scale.set(1, 1, .8);
+    const head = new THREE.Group();
+    head.position.set(0, 1.0, d.beak ? .15 : .45);
+    body.add(head);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.34, 12, 10), m), 0, 0, 0, head);
+    if (d.beak) {
+        add(new THREE.Mesh(new THREE.SphereGeometry(.24, 10, 8), m2), 0, .02, .16, head).scale.set(1.2, 1, .5);
+        add(new THREE.Mesh(new THREE.ConeGeometry(.06, .16, 6), M(0xe8a020)), 0, -.06, .33, head).rotation.x = 1.9;
+    }
+    else {
+        add(new THREE.Mesh(new THREE.SphereGeometry(.15, 8, 8), m2), 0, -.07, .3, head).scale.set(1, .8, d.long ? 1.9 : 1.1);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.055, 6, 6), k), 0, -.03, d.long ? .58 : .46, head);
+    }
+    [-1, 1].forEach(sd => {
+        add(new THREE.Mesh(new THREE.SphereGeometry(d.beak ? .07 : .05, 6, 6), d.beak ? new THREE.MeshBasicMaterial({ color: 0xffcc22 }) : k), sd * .13, .08, .29, head);
+        if (d.ear == 'round')
+            add(new THREE.Mesh(new THREE.SphereGeometry(.11, 8, 6), m), sd * .23, .25, -.02, head);
+        else if (d.ear == 'point')
+            add(new THREE.Mesh(new THREE.ConeGeometry(.1, .28, 5), m), sd * .18, .32, 0, head).rotation.z = -sd * .25;
+        else if (d.ear == 'tuft')
+            add(new THREE.Mesh(new THREE.ConeGeometry(.06, .2, 4), m), sd * .2, .3, 0, head).rotation.z = -sd * .5;
+        else if (d.ear == 'horn')
+            add(new THREE.Mesh(new THREE.ConeGeometry(.05, .26, 5), m2), sd * .15, .3, -.1, head).rotation.x = -.5;
+    });
+    g.legs = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => { const l = new THREE.Group(); l.position.set(sx * .22, .38, sz * .28); add(new THREE.Mesh(new THREE.BoxGeometry(.15, d.fly ? .2 : .36, .15), d.beak ? M(0xe8a020) : m), 0, -.17, 0, l); body.add(l); return l; });
+    if (d.tail == 'stub')
+        g.tail = add(new THREE.Mesh(new THREE.SphereGeometry(.1, 6, 6), m), 0, .65, -.55, body);
+    else if (d.tail == 'bushy') {
+        g.tail = new THREE.Group();
+        g.tail.position.set(0, .7, -.5);
+        body.add(g.tail);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.17, 8, 6), m), 0, .12, -.25, g.tail).scale.set(1, 1, 2);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.1, 6, 6), m2), 0, .2, -.55, g.tail);
+    }
+    else if (d.tail == 'long') {
+        g.tail = new THREE.Group();
+        g.tail.position.set(0, .6, -.5);
+        body.add(g.tail);
+        add(new THREE.Mesh(new THREE.ConeGeometry(.12, .8, 6), m), 0, 0, -.38, g.tail).rotation.x = -1.6;
+    }
+    if (d.wings)
+        g.wings = [-1, 1].map(sd => { const w = new THREE.Group(); w.position.set(sd * .35, .8, -.05); add(new THREE.Mesh(new THREE.BoxGeometry(.6, .04, .38), d.beak ? m : m2), sd * .3, 0, 0, w); body.add(w); return w; });
+    g.head = head;
+    g.body = body;
+    g.scale.setScalar(d.s);
+    g.traverse(o => { if (o.isMesh && o.material.isMeshLambertMaterial)
+        o.castShadow = true; });
+    return g;
+}
+function petClear() { if (PET) {
+    S.remove(PET.mesh);
+    PET = null;
+} }
+function summonPet(i, quiet) {
+    const d = PETS[i];
+    if (!d)
+        return;
+    if (P.lvl < d.lvl && !quiet)
+        return say('The ' + d.n + ' unlocks at level ' + d.lvl + '.');
+    petClear();
+    const g = petMesh(d), a = P.mesh.rotation.y;
+    g.position.set(P.pos.x + Math.cos(a) * 1.6, 0, P.pos.z - Math.sin(a) * 1.6);
+    S.add(g);
+    PET = { i, d, mesh: g, pos: g.position, cd: 0, bite: 0 };
+    burst(g.position, 0xffe48a, 12, 1);
+    if (!quiet)
+        say('<span style="color:#ffe48a">' + d.e + ' Your ' + d.n + ' is following you!</span>');
+}
+function dismissPet() { if (!PET)
+    return; burst(PET.pos, 0xffe48a, 10, 1); say(PET.d.e + ' ' + PET.d.n + ' dismissed.'); petClear(); }
+function petTarget() {
+    if (P.dead || G.on || DU)
+        return null;
+    const m = P.t;
+    return m && !m.wb && !m.bot && mobs.indexOf(m) >= 0 && m.hp > 0 && m.aggro && d3(m, P) < 25 ? m : null;
+}
+function petTick(dt, t) {
+    if (!PET)
+        return;
+    const g = PET.mesh, d = PET.d, a = P.mesh.rotation.y, tg = petTarget();
+    let gx = P.pos.x - Math.sin(a) * 1.4 + Math.cos(a) * 1.6, gz = P.pos.z - Math.cos(a) * 1.4 - Math.sin(a) * 1.6;
+    if (tg) {
+        const dx = PET.pos.x - tg.pos.x, dz = PET.pos.z - tg.pos.z, l = Math.hypot(dx, dz) || 1;
+        gx = tg.pos.x + dx / l * 1.6;
+        gz = tg.pos.z + dz / l * 1.6;
+    }
+    const dx = gx - PET.pos.x, dz = gz - PET.pos.z, dist = Math.hypot(dx, dz);
+    if (d3(PET, P) > 45) {
+        PET.pos.x = gx;
+        PET.pos.z = gz;
+    }
+    const mv = dist > .35;
+    if (mv) {
+        const sp = Math.min(dist, Math.min(32, Math.max(6, dist * 3)) * dt);
+        PET.pos.x += dx / dist * sp;
+        PET.pos.z += dz / dist * sp;
+        g.rotation.y = Math.atan2(dx, dz);
+    }
+    else {
+        const f = tg || P, ty = Math.atan2(f.pos.x - PET.pos.x, f.pos.z - PET.pos.z);
+        let df = ty - g.rotation.y;
+        df = Math.atan2(Math.sin(df), Math.cos(df));
+        g.rotation.y += df * Math.min(1, dt * 4);
+    }
+    const hop = mv && !d.fly ? Math.abs(Math.sin(t * 14)) * .15 : 0;
+    PET.pos.y = groundH(PET.pos.x, PET.pos.z) + (d.fly ? 1.8 + Math.sin(t * 3) * .2 : 0) + hop;
+    const sw = mv ? Math.sin(t * 14) * .7 : 0;
+    g.legs.forEach((l, j) => l.rotation.x = (j == 0 || j == 3) ? sw : -sw);
+    if (g.tail)
+        g.tail.rotation.y = Math.sin(t * (mv ? 14 : 5)) * .35;
+    if (g.wings)
+        g.wings.forEach((w, j) => w.rotation.z = (j ? -1 : 1) * (Math.sin(t * (mv ? 16 : 9)) * .5 + .2));
+    PET.bite = Math.max(0, PET.bite - dt);
+    g.head.position.z = (d.beak ? .15 : .45) + (PET.bite > 0 ? Math.sin(PET.bite / .25 * PI) * .3 : 0);
+    g.head.rotation.x = mv ? 0 : Math.sin(t * 2) * .06;
+    PET.cd = Math.max(0, PET.cd - dt);
+    if (tg && d3(PET, tg) < 2.6 && PET.cd <= 0) {
+        PET.cd = 1.6;
+        PET.bite = .25;
+        hit(tg, Math.max(1, Math.round((2 + P.lvl * 1.2) * d.pw)));
+    }
+}
+function togglePets() { if (!running)
+    return; const p = $('petw'); p.style.display = p.style.display == 'flex' ? 'none' : 'flex'; renderPets(); }
+function renderPets() {
+    $('petw').innerHTML = `<div class="mp" style="min-width:min(600px,92vw);max-width:96vw;text-align:center"><b style="color:var(--gold)">🐾 Pets</b><span onclick="togglePets()" style="float:right;cursor:pointer">✕</span><div style="margin:8px 0 12px;font-size:12px;opacity:.8">Click a pet to summon it · click your active pet to dismiss it. Pets follow you and nip at enemies you're fighting. K or Esc to close.</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${PETS.map((d, i) => { const ok = P.lvl >= d.lvl, on = PET && PET.i === i; return `<div class="sl" onclick="pickPet(${i})" title="${d.d}" style="cursor:${ok ? 'pointer' : 'default'};opacity:${ok ? 1 : .45};width:100px;height:122px;background:radial-gradient(circle at 50% 35%,#${d.col.toString(16).padStart(6, '0')},#050505 85%);border-color:${on ? '#fff' : '#e8b84a'};${on ? 'box-shadow:0 0 12px #ffe48a' : ''}"><i class="ic" style="font-size:46px;top:10px">${d.e}</i><span style="font-size:11px;bottom:38px">${d.n}</span><em style="bottom:22px;color:#fff">${on ? '✔ Active' : ok ? 'Summon' : '🔒 Lv ' + d.lvl}</em><em style="color:#8cf">${d.fly ? 'Flying' : 'Ground'}</em></div>`; }).join('')}</div></div>`;
+}
+function pickPet(i) {
+    if (P.lvl < PETS[i].lvl)
+        return say('The ' + PETS[i].n + ' unlocks at level ' + PETS[i].lvl + '.');
+    if (PET && PET.i === i)
+        dismissPet();
+    else
+        summonPet(i);
+    saveHero();
+    renderPets();
+}
+
+// ===== Toys: fun items with cooldowns (Piñata, Bubble Gum, ...) =====
+const TOYS = [
+    { n: 'Piñata', e: '🪅', lvl: 1, cd: 30, col: 0xe8408a, d: 'Hangs a piñata in front of you. Click it to smash it open for candy and a little gold!', f: () => spawnPinata() },
+    { n: 'Bubble Gum', e: '🫧', lvl: 1, cd: 10, col: 0xff8fc8, d: 'Chew for 5 minutes: blow bubbles, +15% move speed and higher jumps.', f: () => chewGum() },
+    { n: 'Fireworks', e: '🎆', lvl: 1, cd: 15, col: 0x3a4aff, d: 'Launch a volley of colorful fireworks into the sky!', f: () => launchFireworks() },
+    { n: 'Red Balloon', e: '🎈', lvl: 2, cd: 20, col: 0xe02a2a, d: 'Hold a balloon for 1 minute: you float down slowly and jump much higher.', f: () => holdBalloon() },
+    { n: 'Snowman', e: '⛄', lvl: 3, cd: 30, col: 0xbfe6ff, d: 'Build a friendly snowman that waves at you for 1 minute.', f: () => buildSnowman() },
+    { n: 'Campfire', e: '🔥', lvl: 4, cd: 60, col: 0xff7a1a, d: 'Light a campfire for 1 minute. Standing near it slowly restores health and mana.', f: () => lightCampfire() }
+];
+let PIN = null, toyCD = {};
+const PIN_COLS = [0xe8408a, 0xffd23a, 0x3ac8ff, 0x7be04a, 0xff7a2a, 0xb05aff];
+function spawnPinata() {
+    if (DG.on || G.on || DU)
+        return say('You cannot use the Piñata here.') || false;
+    removePinata(true);
+    const a = P.mesh.rotation.y, x = P.pos.x + Math.sin(a) * 4, z = P.pos.z + Math.cos(a) * 4, gy = groundH(x, z);
+    const root = new THREE.Group(), wood = M(0x6b4a2a);
+    root.position.set(x, gy, z);
+    root.rotation.y = a + PI / 2;
+    // a little wooden gallows to hang it from
+    add(new THREE.Mesh(new THREE.BoxGeometry(.18, 4.2, .18), wood), -1.6, 2.1, 0, root);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.18, 4.2, .18), wood), 1.6, 2.1, 0, root);
+    add(new THREE.Mesh(new THREE.BoxGeometry(3.6, .18, .18), wood), 0, 4.2, 0, root);
+    const swing = new THREE.Group();
+    swing.position.set(0, 4.1, 0);
+    root.add(swing);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.02, .02, 1, 4), M(0xeeeeee)), 0, -.5, 0, swing);
+    // the piñata: a striped llama-ish critter
+    const body = new THREE.Group();
+    body.position.y = -1.9;
+    swing.add(body);
+    for (let i = 0; i < 6; i++)
+        add(new THREE.Mesh(new THREE.BoxGeometry(.24, .7, .6), M(PIN_COLS[i])), -.6 + i * .24, 0, 0, body);
+    const neck = new THREE.Group();
+    neck.position.set(.62, .3, 0);
+    body.add(neck);
+    for (let i = 0; i < 4; i++)
+        add(new THREE.Mesh(new THREE.BoxGeometry(.3, .2, .3), M(PIN_COLS[(i + 2) % 6])), 0, i * .2, 0, neck);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.45, .3, .32), M(PIN_COLS[0])), .1, .9, 0, neck);
+    [-1, 1].forEach(sd => {
+        add(new THREE.Mesh(new THREE.SphereGeometry(.04, 6, 6), new THREE.MeshBasicMaterial({ color: 0x111111 })), .2, .95, sd * .17, neck);
+        add(new THREE.Mesh(new THREE.ConeGeometry(.06, .2, 4), M(PIN_COLS[3])), -.05, 1.12, sd * .1, neck);
+    });
+    [[-.5, -.2], [-.5, .2], [.5, -.2], [.5, .2]].forEach(([lx, lz], i) => add(new THREE.Mesh(new THREE.BoxGeometry(.16, .45, .16), M(PIN_COLS[(i + 4) % 6])), lx, -.55, lz, body));
+    // paper fringe
+    for (let i = 0; i < 10; i++)
+        add(new THREE.Mesh(new THREE.BoxGeometry(.12, .25, .02), M(PIN_COLS[i % 6])), -.65 + i * .14, -.35, .31, body).rotation.z = rnd(-.3, .3);
+    root.traverse(o => { if (o.isMesh)
+        o.castShadow = true; });
+    // invisible, generous click box so the swinging piñata is easy to hit
+    add(new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.6, 1.4), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })), .1, .1, 0, body);
+    S.add(root);
+    PIN = { root, swing, body, hp: 6, max: 6, sv: 0, life: 120, pos: root.position };
+    burst(new THREE.Vector3(x, gy + 2, z), 0xffd23a, 14, 1.2);
+    say('🪅 A Piñata appears! Click it to whack it.');
+}
+function removePinata(quiet) { if (!PIN)
+    return; S.remove(PIN.root); if (!quiet)
+    say('The Piñata floats away...'); PIN = null; }
+function hitPinata() {
+    if (!PIN)
+        return;
+    if (d3(PIN, P) > 8)
+        return say('Move closer to the Piñata.');
+    P.sw = .3;
+    P.mesh.rotation.y = Math.atan2(PIN.pos.x - P.pos.x, PIN.pos.z - P.pos.z);
+    PIN.hp--;
+    PIN.sv += 2.5 * (Math.random() < .5 ? -1 : 1);
+    const wp = new THREE.Vector3();
+    PIN.body.getWorldPosition(wp);
+    burst(wp, PIN_COLS[(Math.random() * 6) | 0], 8, 1.2);
+    float(wp, PIN.hp > 0 ? 'Whack!' : 'SMASH!', '#ffd23a');
+    if (PIN.hp > 0)
+        return;
+    for (let i = 0; i < 6; i++)
+        burst(wp, PIN_COLS[i], 10, 2.2);
+    const g = 2 + ((Math.random() * Math.max(2, P.lvl)) | 0);
+    P.gold += g;
+    const candy = ['🍬', '🍭', '🍫', '🍡'][(Math.random() * 4) | 0];
+    say('<span style="color:#ffd23a">🪅 The Piñata bursts! ' + candy + ' Candy everywhere! +' + g + ' gold</span>');
+    S.remove(PIN.root);
+    PIN = null;
+}
+function pinataTick(dt, t) {
+    if (!PIN)
+        return;
+    PIN.life -= dt;
+    if (PIN.life <= 0 || d3(PIN, P) > 60)
+        return removePinata();
+    PIN.sv *= Math.pow(.25, dt);
+    PIN.swing.rotation.x = Math.sin(t * 6) * PIN.sv * .12 + Math.sin(t * 1.3) * .05;
+    PIN.swing.rotation.z = Math.cos(t * 5) * PIN.sv * .05;
+    const k = PIN.hp / PIN.max;
+    PIN.body.scale.setScalar(.95 + .05 * k + (PIN.sv > .3 ? Math.sin(t * 30) * .03 : 0));
+}
+// ----- Bubble gum -----
+const GUM_T = 300;
+function chewGum() {
+    P.gum = GUM_T;
+    if (!P.gumB) {
+        const g = new THREE.Group();
+        g.position.set(0, 2.08, .38);
+        const b = new THREE.Mesh(new THREE.SphereGeometry(.7, 16, 12), new THREE.MeshLambertMaterial({ color: 0xff8fc8, emissive: 0x401028, transparent: true, opacity: .85 }));
+        b.position.z = .72;
+        g.add(b);
+        const shine = new THREE.Mesh(new THREE.SphereGeometry(.1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .7 }));
+        shine.position.set(-.28, .3, .45);
+        b.add(shine);
+        g.scale.setScalar(.01);
+        P.mesh.add(g);
+        P.gumB = { g, b, ph: 0, n: 0 };
+    }
+    say('<span style="color:#ff8fc8">🫧 Chomp chomp! Bubble Gum: +15% speed and higher jumps for 5 minutes.</span>');
+}
+function gumEnd(quiet) {
+    if (!P)
+        return;
+    if (P.gumB) {
+        P.mesh.remove(P.gumB.g);
+        P.gumB = null;
+    }
+    if (P.gum > 0 && !quiet)
+        say('Your Bubble Gum lost its flavor.');
+    P.gum = 0;
+}
+function gumTick(dt, t) {
+    if (!P.gum || P.gum <= 0)
+        return;
+    P.gum -= dt;
+    if (P.gum <= 0) {
+        P.gum = 1;
+        return gumEnd();
+    }
+    const B = P.gumB;
+    if (B) {
+        // inflate for 3s, hold briefly, then either deflate back or POP
+        B.ph += dt;
+        const C = 4.2;
+        if (B.ph >= C) {
+            B.ph = 0;
+            B.n++;
+        }
+        const pop = B.n % 3 == 2;
+        let s;
+        if (B.ph < 3)
+            s = .08 + .92 * Math.pow(B.ph / 3, 1.6);
+        else if (B.ph < 3.5)
+            s = 1 + Math.sin((B.ph - 3) * 30) * .03;
+        else if (pop) {
+            if (!B.popped) {
+                B.popped = 1;
+                const wp = new THREE.Vector3();
+                B.b.getWorldPosition(wp);
+                burst(wp, 0xff8fc8, 12, .8);
+                float(wp, 'pop!', '#ff8fc8');
+            }
+            s = .05;
+        }
+        else
+            s = Math.max(.08, 1 - (B.ph - 3.5) / .7 * .92);
+        if (B.ph < 3)
+            B.popped = 0;
+        B.g.scale.setScalar(Math.max(.01, s * .9));
+    }
+}
+// ----- Toy box window -----
+function toyTick(dt, t) {
+    for (const k in toyCD)
+        toyCD[k] = Math.max(0, toyCD[k] - dt);
+    pinataTick(dt, t);
+    gumTick(dt, t);
+    fwTick(dt);
+    balloonTick(dt, t);
+    placedTick(dt, t);
+    toyBuffUI();
+    if ($('toyw').style.display == 'flex' && Math.floor(t * 2) !== toyTick.l) {
+        toyTick.l = Math.floor(t * 2);
+        renderToys();
+    }
+}
+function toggleToys() { if (!running)
+    return; const p = $('toyw'); p.style.display = p.style.display == 'flex' ? 'none' : 'flex'; renderToys(); }
+function renderToys() {
+    $('toyw').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);max-width:96vw;text-align:center"><b style="color:var(--gold)">🎁 Toys</b><span onclick="toggleToys()" style="float:right;cursor:pointer">✕</span><div style="margin:8px 0 12px;font-size:12px;opacity:.8">Click a toy to use it. Toys are just for fun! T or Esc to close.</div><div style="display:grid;grid-template-columns:repeat(3,120px);gap:10px;justify-content:center">${TOYS.map((d, i) => { const ok = P.lvl >= d.lvl, cd = Math.ceil(toyCD[i] || 0); return `<div class="sl" onclick="useToy(${i})" title="${d.d}" style="cursor:${ok && !cd ? 'pointer' : 'default'};opacity:${ok ? 1 : .45};width:120px;height:132px;background:radial-gradient(circle at 50% 35%,#${d.col.toString(16).padStart(6, '0')},#050505 85%)"><i class="ic" style="font-size:46px;top:10px">${d.e}</i><span style="font-size:12px;bottom:40px">${d.n}</span><em style="bottom:22px;color:#fff;font-size:10px">${!ok ? '🔒 Lv ' + d.lvl : cd ? '⏳ ' + cd + 's' : 'Use'}</em><em style="color:#8cf;font-size:10px">${i == 1 && P.gum > 0 ? 'Chewing!' : i == 3 && P.bal > 0 ? 'Holding!' : 'Cooldown ' + d.cd + 's'}</em></div>`; }).join('')}</div><div style="margin-top:10px;font-size:12px;opacity:.75;text-align:left;max-width:400px;margin-left:auto;margin-right:auto">${TOYS.map(d => d.e + ' <b>' + d.n + '</b>: ' + d.d).join('<br>')}</div></div>`;
+}
+function useToy(i) {
+    const d = TOYS[i];
+    if (P.lvl < d.lvl)
+        return say(d.n + ' unlocks at level ' + d.lvl + '.');
+    if (toyCD[i] > 0)
+        return say(d.n + ' is not ready yet (' + Math.ceil(toyCD[i]) + 's).');
+    if (P.dead)
+        return;
+    if (d.f() === false)
+        return;
+    toyCD[i] = d.cd;
+    $('toyw').style.display = 'none';
+}
+// ----- Toy buff timers (top-left) -----
+function toyBuffUI() {
+    const f = (e, n, v) => e + ' ' + n + ' ' + Math.floor(v / 60) + ':' + String(Math.floor(v % 60)).padStart(2, '0');
+    const L = [];
+    if (P.gum > 0)
+        L.push('<span style="color:#ff8fc8">' + f('🫧', 'Bubble Gum', P.gum) + '</span>');
+    if (P.bal > 0)
+        L.push('<span style="color:#ff6b6b">' + f('🎈', 'Balloon', P.bal) + '</span>');
+    if (P.stealth)
+        L.push('<span style="color:#c9b0ff">👤 Stealthed</span>');
+    const el = $('toyb'), s = L.join('<br>');
+    el.style.display = s ? 'block' : 'none';
+    if (el.dataset.s !== s) {
+        el.dataset.s = s;
+        el.innerHTML = s;
+    }
+}
+// ----- Fireworks -----
+let fwR = [], fwP = [];
+const FW_COLS = [0xff3a3a, 0xffd23a, 0x3ac8ff, 0x7bff4a, 0xff5ae0, 0xffffff, 0xff9a2a, 0xb05aff];
+function launchFireworks() {
+    for (let i = 0; i < 6; i++) {
+        const col = FW_COLS[(Math.random() * FW_COLS.length) | 0];
+        const r = new THREE.Mesh(new THREE.CylinderGeometry(.08, .12, .6, 6), new THREE.MeshBasicMaterial({ color: col }));
+        r.position.set(P.pos.x + rnd(-1.5, 1.5), P.pos.y + .5, P.pos.z + rnd(-1.5, 1.5));
+        r.visible = false;
+        S.add(r);
+        fwR.push({ m: r, col, delay: i * .45, vx: rnd(-1.5, 1.5), vz: rnd(-1.5, 1.5), vy: rnd(17, 23), t: rnd(.9, 1.2), kind: i % 3 });
+    }
+    say('<span style="color:#9fd8ff">🎆 Fireworks! Look up!</span>');
+}
+function fwExplode(p, col, kind) {
+    const n = kind == 1 ? 60 : 44, col2 = FW_COLS[(Math.random() * FW_COLS.length) | 0];
+    for (let i = 0; i < n; i++) {
+        const c = kind == 2 && i % 2 ? col2 : col;
+        const m = new THREE.Mesh(new THREE.SphereGeometry(kind == 1 ? .12 : .17, 5, 4), new THREE.MeshBasicMaterial({ color: c, transparent: true }));
+        m.position.copy(p);
+        S.add(m);
+        // even spread on a sphere; kind 1 is a flat ring
+        const u = Math.random() * 2 - 1, a = Math.random() * 6.283, sp = kind == 1 ? 11 : rnd(7, 10);
+        const v = kind == 1 ? new THREE.Vector3(Math.cos(i / n * 6.283), rnd(-.1, .1), Math.sin(i / n * 6.283)).multiplyScalar(sp) : new THREE.Vector3(Math.sqrt(1 - u * u) * Math.cos(a), u, Math.sqrt(1 - u * u) * Math.sin(a)).multiplyScalar(sp);
+        fwP.push({ m, v, t: rnd(1.1, 1.6), max: 1.6 });
+    }
+}
+function fwTick(dt) {
+    fwR = fwR.filter(r => {
+        if (r.delay > 0) {
+            r.delay -= dt;
+            r.m.visible = r.delay <= 0;
+            return true;
+        }
+        r.m.position.x += r.vx * dt;
+        r.m.position.z += r.vz * dt;
+        r.m.position.y += r.vy * dt;
+        r.vy -= 6 * dt;
+        r.t -= dt;
+        if (Math.random() < .8)
+            burst(r.m.position.clone().setY(r.m.position.y - 1.2), 0xffcc66, 1, .2);
+        if (r.t <= 0) {
+            fwExplode(r.m.position, r.col, r.kind);
+            S.remove(r.m);
+            return false;
+        }
+        return true;
+    });
+    fwP = fwP.filter(q => {
+        q.t -= dt;
+        q.v.multiplyScalar(Math.pow(.35, dt));
+        q.v.y -= 3 * dt;
+        q.m.position.addScaledVector(q.v, dt);
+        q.m.material.opacity = Math.min(1, q.t / .6);
+        if (q.t <= 0) {
+            S.remove(q.m);
+            q.m.material.dispose();
+            return false;
+        }
+        return true;
+    });
+}
+// ----- Red balloon -----
+function holdBalloon() {
+    P.bal = 60;
+    if (!P.balM) {
+        const g = new THREE.Group();
+        g.position.set(.55, 1.6, .1);
+        add(new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, 2, 4), new THREE.MeshBasicMaterial({ color: 0xeeeeee })), 0, 1, 0, g);
+        const b = add(new THREE.Mesh(new THREE.SphereGeometry(.5, 14, 12), new THREE.MeshLambertMaterial({ color: 0xe02a2a, emissive: 0x300808 })), 0, 2.45, 0, g);
+        b.scale.set(1, 1.2, 1);
+        add(new THREE.Mesh(new THREE.ConeGeometry(.08, .14, 6), M(0xc01a1a)), 0, 1.86, 0, g).rotation.x = PI;
+        add(new THREE.Mesh(new THREE.SphereGeometry(.09, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .6 })), -.2, 2.7, .35, g);
+        P.mesh.add(g);
+        P.balM = g;
+    }
+    say('<span style="color:#ff6b6b">🎈 You grab a red balloon! Jump high and float down slowly for 1 minute.</span>');
+}
+function balloonEnd(quiet) {
+    if (P && P.balM) {
+        P.mesh.remove(P.balM);
+        P.balM = null;
+    }
+    if (P && P.bal > 0 && !quiet)
+        say('🎈 Your balloon floats away...');
+    if (P)
+        P.bal = 0;
+}
+function balloonTick(dt, t) {
+    if (!(P.bal > 0))
+        return;
+    P.bal -= dt;
+    if (P.balM) {
+        P.balM.rotation.z = Math.sin(t * 1.7) * .12 - (P.mv ? .2 : 0);
+        P.balM.rotation.x = Math.cos(t * 1.3) * .1 + (P.mv ? -.25 : 0);
+    }
+    if (P.bal <= 0) {
+        P.bal = 1;
+        balloonEnd();
+    }
+}
+// ----- Placed toys (snowman, campfire) -----
+let PLACED = [];
+function placeSpot(dist) { const a = P.mesh.rotation.y, x = P.pos.x + Math.sin(a) * dist, z = P.pos.z + Math.cos(a) * dist; return { x, z, y: groundH(x, z), a }; }
+function noPlace() { if (DG.on || G.on || DU) {
+    say('You cannot place that here.');
+    return true;
+} return false; }
+function buildSnowman() {
+    if (noPlace())
+        return false;
+    const p = placeSpot(3.5), g = new THREE.Group(), snow = M(0xf4f8ff), k = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    g.position.set(p.x, p.y, p.z);
+    g.rotation.y = p.a + PI;
+    add(new THREE.Mesh(new THREE.SphereGeometry(.85, 14, 12), snow), 0, .75, 0, g);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.62, 14, 12), snow), 0, 1.95, 0, g);
+    const head = add(new THREE.Mesh(new THREE.SphereGeometry(.45, 14, 12), snow), 0, 2.85, 0, g);
+    [-1, 1].forEach(sd => add(new THREE.Mesh(new THREE.SphereGeometry(.06, 6, 6), k), sd * .16, .1, .4, head));
+    add(new THREE.Mesh(new THREE.ConeGeometry(.08, .45, 6), M(0xff7a1a)), 0, -.02, .6, head).rotation.x = PI / 2;
+    for (let i = 0; i < 5; i++)
+        add(new THREE.Mesh(new THREE.SphereGeometry(.04, 5, 5), k), (i - 2) * .08, -.2 - Math.abs(i - 2) * -.03 - .02, .4, head);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.48, .48, .06, 14), k), 0, .38, 0, head);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.3, .32, .5, 14), k), 0, .65, 0, head);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.33, .33, .1, 14), M(0xc0202a)), 0, .45, 0, head);
+    add(new THREE.Mesh(new THREE.TorusGeometry(.46, .1, 6, 16), M(0x2a7a3a)), 0, 2.45, 0, g).rotation.x = PI / 2;
+    for (let i = 0; i < 3; i++)
+        add(new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 6), k), 0, 2.2 - i * .3, .6 - Math.abs(i - 1) * .03, g);
+    const arms = [-1, 1].map(sd => { const a = new THREE.Group(); a.position.set(sd * .55, 2.05, 0); add(new THREE.Mesh(new THREE.CylinderGeometry(.04, .05, 1.1, 5), M(0x5a3a1a)), sd * .5, .2, 0, a).rotation.z = -sd * 1.1; g.add(a); return a; });
+    g.traverse(o => { if (o.isMesh)
+        o.castShadow = true; });
+    S.add(g);
+    burst(new THREE.Vector3(p.x, p.y, p.z), 0xffffff, 20, 1.5);
+    PLACED.push({ root: g, life: 60, tick(dt, t) { arms[1].rotation.z = Math.sin(t * 6) * .5 + .4; head.rotation.y = Math.sin(t * .8) * .3; if (Math.random() < .05)
+            burst(new THREE.Vector3(g.position.x + rnd(-2, 2), g.position.y + 4, g.position.z + rnd(-2, 2)), 0xffffff, 1, -.2, 0); } });
+    say('⛄ You built a snowman! It waves hello.');
+}
+function lightCampfire() {
+    if (noPlace())
+        return false;
+    const p = placeSpot(2.8), g = new THREE.Group(), wood = M(0x5a3a1a), stone = M(0x777777);
+    g.position.set(p.x, p.y, p.z);
+    for (let i = 0; i < 8; i++)
+        add(new THREE.Mesh(new THREE.DodecahedronGeometry(.22, 0), stone), Math.cos(i / 8 * 6.283) * .8, .12, Math.sin(i / 8 * 6.283) * .8, g);
+    for (let i = 0; i < 4; i++) {
+        const l = add(new THREE.Mesh(new THREE.CylinderGeometry(.08, .1, 1.2, 6), wood), 0, .25, 0, g);
+        l.rotation.set(1.1, i / 4 * 6.283, 0);
+    }
+    const fl = add(new THREE.Mesh(new THREE.ConeGeometry(.4, 1.1, 8), new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: .9 })), 0, .75, 0, g);
+    const fl2 = add(new THREE.Mesh(new THREE.ConeGeometry(.22, .7, 8), new THREE.MeshBasicMaterial({ color: 0xffe14a })), 0, .6, 0, g);
+    const light = new THREE.PointLight(0xff8a2a, 1.4, 12);
+    light.position.set(0, 1.4, 0);
+    g.add(light);
+    S.add(g);
+    let msgT = 0;
+    PLACED.push({ root: g, life: 60, tick(dt, t) {
+            fl.scale.set(1 + Math.sin(t * 17) * .1, 1 + Math.sin(t * 11) * .25, 1 + Math.cos(t * 13) * .1);
+            fl2.scale.set(1, 1 + Math.sin(t * 21) * .3, 1);
+            light.intensity = 1.2 + Math.sin(t * 23) * .2 + Math.random() * .2;
+            if (Math.random() < .3)
+                burst(new THREE.Vector3(g.position.x, g.position.y, g.position.z), Math.random() < .5 ? 0xff9933 : 0xffdd55, 1, .5, 1);
+            if (!P.dead && d3(g.position, P) < 4.5) {
+                P.hp = Math.min(P.max, P.hp + P.max * .03 * dt);
+                P.mp = Math.min(P.mmax, P.mp + P.mmax * .03 * dt);
+                msgT -= dt;
+                if (msgT <= 0) {
+                    msgT = 3;
+                    if (P.hp < P.max || P.mp < P.mmax)
+                        float(P.pos, '🔥 cozy', '#ffb347');
+                }
+            }
+        } });
+    say('🔥 You light a cozy campfire. Stand close to recover health and mana.');
+}
+function placedTick(dt, t) {
+    PLACED = PLACED.filter(o => {
+        o.life -= dt;
+        o.tick(dt, t);
+        if (o.life <= 0) {
+            burst(o.root.position, 0xcccccc, 12, 1);
+            S.remove(o.root);
+            return false;
+        }
+        return true;
+    });
+}
+function toyCleanup() {
+    balloonEnd(true);
+    PLACED.forEach(o => S.remove(o.root));
+    PLACED = [];
+    fwR.forEach(r => S.remove(r.m));
+    fwP.forEach(q => S.remove(q.m));
+    fwR = [];
+    fwP = [];
+    $('toyb').style.display = 'none';
+    $('toyb').dataset.s = '';
+}
+
+// ===== Jump Challenge: a spiral of floating platforms next to The Pit =====
+const JP = [], JR = { on: false, t: 0, cp: 0, falls: 0, done: false };
+const JC_A0 = -PI / 4 + .55, JC_RAD = 10.5, JC_START = { x: JC.x + Math.cos(JC_A0) * 15.5, z: JC.z + Math.sin(JC_A0) * 15.5 };
+function jcFmt(s) { return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0'); }
+(function buildJumpCourse() {
+    const base = groundH(JC.x, JC.z), N = 20, a0 = JC_A0;
+    // central stone pillar with a beacon on top (decoration only)
+    const pil = add(new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 24, 12), TM(stoneT)), JC.x, base + 12, JC.z);
+    pil.castShadow = pil.receiveShadow = true;
+    const bea = add(new THREE.Mesh(new THREE.OctahedronGeometry(1.1), new THREE.MeshBasicMaterial({ color: 0x9dff7a })), JC.x, base + 25.5, JC.z);
+    JC.bea = bea;
+    for (let i = 0; i < N; i++) {
+        const a = a0 + i * .62, r = JC_RAD, cp = i == 7 || i == 14, fin = i == N - 1, small = !cp && !fin && i % 4 == 3, mv = !cp && !fin && i > 0 && i % 5 == 2;
+        const w = fin ? 4 : cp ? 3.2 : small ? 1.7 : 2.4;
+        const x = JC.x + Math.cos(a) * r, z = JC.z + Math.sin(a) * r, top = base + 1 + i * 1.05;
+        const col = fin ? 0xffd23a : cp ? 0xe8b84a : mv ? 0xa05aff : new THREE.Color().setHSL(.33 - i / N * .33, .55, .45).getHex();
+        const m = add(new THREE.Mesh(new THREE.BoxGeometry(w, .5, w), M(col)), x, top - .25, z);
+        m.castShadow = m.receiveShadow = true;
+        // little hanging rock under each platform so they look like floating islands
+        add(new THREE.Mesh(new THREE.ConeGeometry(w * .45, w * .8, 6), TM(rockT)), 0, -.25 - w * .4, 0, m).rotation.x = PI;
+        if (cp || fin) {
+            add(new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 2.4, 6), M(0x5a3a1a)), w / 2 - .3, 1.45, w / 2 - .3, m);
+            const fl = add(new THREE.Mesh(new THREE.BoxGeometry(.9, .55, .04), M(fin ? 0xff3a3a : 0x7be04a)), w / 2 - .3 + .45, 2.35, w / 2 - .3, m);
+            fl.userData.flag = 1;
+        }
+        if (fin) {
+            const ring = add(new THREE.Mesh(new THREE.TorusGeometry(1.3, .12, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffe48a })), 0, 1.6, 0, m);
+            JC.ring = ring;
+        }
+        JP.push({ i, x, z, x0: x, z0: z, a, top, w, m, cp, fin, mv, dx: 0, dz: 0 });
+    }
+    // start pad on the ground facing the arena
+    const pad = add(new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, .2, 24), new THREE.MeshLambertMaterial({ color: 0x7be04a, emissive: 0x1a4a10 })), JC_START.x, groundH(JC_START.x, JC_START.z) + .1, JC_START.z);
+    pad.receiveShadow = true;
+    JC.pad = pad;
+    const cv = document.createElement('canvas');
+    cv.width = 512;
+    cv.height = 128;
+    const g = cv.getContext('2d');
+    g.font = 'bold 52px Georgia';
+    g.textAlign = 'center';
+    g.lineWidth = 8;
+    g.strokeStyle = '#000';
+    g.strokeText('🦘 JUMP CHALLENGE', 256, 62);
+    g.fillStyle = '#9dff7a';
+    g.fillText('🦘 JUMP CHALLENGE', 256, 62);
+    g.font = 'bold 28px Georgia';
+    g.strokeText('Reach the top flag! Race the clock', 256, 108);
+    g.fillStyle = '#ffe0a0';
+    g.fillText('Reach the top flag! Race the clock', 256, 108);
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+    sign.scale.set(11, 2.75, 1);
+    sign.position.set(JC.x + Math.cos(JC_A0 - .3) * 17, groundH(JC_START.x, JC_START.z) + 5, JC.z + Math.sin(JC_A0 - .3) * 17);
+    S.add(sign);
+})();
+function platTop(x, z, feet) {
+    let best = null;
+    for (const p of JP) {
+        const h = p.w / 2 + .2;
+        if (Math.abs(x - p.x) <= h && Math.abs(z - p.z) <= h && p.top <= feet + .35 && (!best || p.top > best.top))
+            best = p;
+    }
+    return best;
+}
+// Works out what the hero is standing on: terrain or a platform. Keeps height smooth when stepping on/off.
+function jcGround() {
+    const x = P.pos.x, z = P.pos.z, base = groundH(x, z);
+    let g = base, pl = null;
+    if (Math.hypot(x - JC.x, z - JC.z) < JC.R && !G.on && !DG.on) {
+        const feet = P.pos.y - (P.by || 0);
+        pl = platTop(x, z, feet);
+        if (pl)
+            g = Math.max(base, pl.top);
+    }
+    if (pl && pl === P.onP && (P.jy || 0) < .05) {
+        P.pos.x += pl.dx;
+        P.pos.z += pl.dz;
+    }
+    if (P.gl !== undefined && (pl || P.onP) && g !== P.gl)
+        P.jy = Math.max(0, (P.jy || 0) + P.gl - g);
+    P.gl = g;
+    P.onP = pl;
+}
+function jcReset() { JR.on = false; JR.done = false; JR.t = 0; JR.cp = 0; JR.falls = 0; $('jcp').style.display = 'none'; }
+function jcTick(dt, t) {
+    // animate course
+    JP.forEach(p => {
+        if (p.mv) {
+            const off = Math.sin(t * 1.3 + p.i) * 1.4, nx = p.x0 + Math.cos(p.a) * off, nz = p.z0 + Math.sin(p.a) * off;
+            p.dx = nx - p.x;
+            p.dz = nz - p.z;
+            p.x = nx;
+            p.z = nz;
+            p.m.position.x = nx;
+            p.m.position.z = nz;
+        }
+        p.m.children.forEach(c => { if (c.userData.flag)
+            c.rotation.y = Math.sin(t * 3 + p.i) * .3; });
+    });
+    if (JC.ring)
+        JC.ring.rotation.y = t * 2;
+    JC.bea.rotation.y = t;
+    JC.bea.position.y = groundH(JC.x, JC.z) + 25.5 + Math.sin(t * 2) * .3;
+    JC.pad.material.emissive.setHSL(.3, .7, .12 + Math.sin(t * 3) * .06);
+    const near = Math.hypot(P.pos.x - JC.x, P.pos.z - JC.z), el = $('jcp'), onPad = Math.hypot(P.pos.x - JC_START.x, P.pos.z - JC_START.z) < 3;
+    const best = CUR && CUR.jb ? jcFmt(CUR.jb) : '—';
+    if (G.on || DG.on || P.dead) {
+        if (JR.on)
+            jcReset();
+        el.style.display = 'none';
+        return;
+    }
+    if (!JR.on) {
+        if (!P.onP && (P.jy || 0) < .05 && near < JC.R)
+            JR.done = false;
+        if (P.onP && P.onP.i == 0 && !JR.done) {
+            if (P.mount)
+                dismount();
+            JR.on = true;
+            JR.t = 0;
+            JR.cp = 0;
+            JR.falls = 0;
+            bn('🦘 GO!', 1200);
+            say('<span style="color:#9dff7a">🦘 Jump Challenge started! Reach the golden platform at the top.</span>');
+        }
+        else {
+            const s = onPad ? '🦘 <b>Jump Challenge</b><br><small>Jump onto the first platform to start the clock!<br>Best time: ' + best + '</small>' : '';
+            el.style.display = s ? 'block' : 'none';
+            if (s && el.dataset.s !== s) {
+                el.dataset.s = s;
+                el.innerHTML = s;
+            }
+            return;
+        }
+    }
+    JR.t += dt;
+    if (P.mount)
+        dismount();
+    const p = P.onP;
+    if (p && p.cp && p.i > JR.cp) {
+        JR.cp = p.i;
+        burst(P.pos, 0x7be04a, 16, 1.4);
+        say('<span style="color:#9dff7a">🚩 Checkpoint ' + (p.i == 7 ? 1 : 2) + '/2 reached!</span>');
+    }
+    if (p && p.fin) {
+        JR.on = false;
+        JR.done = true;
+        const first = !(CUR && CUR.jb), rec = first || JR.t < CUR.jb;
+        if (CUR && rec) {
+            CUR.jb = JR.t;
+            saveHero();
+        }
+        const xp = (first ? 3 : 1) * 20 * P.lvl, gold = (first ? 3 : 1) * (15 + 3 * P.lvl);
+        addXP(xp);
+        P.gold += gold;
+        bn(rec ? '🏆 NEW RECORD! ' + jcFmt(JR.t) : '🏁 FINISHED! ' + jcFmt(JR.t), 4000);
+        say('<span style="color:#ffd23a">🏁 Jump Challenge complete in ' + jcFmt(JR.t) + ' (' + JR.falls + ' falls)' + (first ? ' — first clear bonus!' : '') + ' +' + xp + ' xp, +' + gold + ' gold</span>');
+        launchFireworks();
+        el.style.display = 'none';
+        return;
+    }
+    // fell to the ground: back to the last checkpoint (or start)
+    if (!p && (P.jy || 0) < .05 && near < JC.R) {
+        JR.falls++;
+        const c = JR.cp ? JP[JR.cp] : null;
+        if (c) {
+            P.pos.x = c.x;
+            P.pos.z = c.z;
+            P.gl = c.top;
+            P.pos.y = c.top + (P.by || 0);
+            P.onP = c;
+            P.jy = 0;
+            P.vy = 0;
+            burst(P.pos, 0x7be04a, 12, 1.2);
+            say('Oops! Back to checkpoint.');
+        }
+        else {
+            jcReset();
+            say('You fell! Jump onto the first platform to try again.');
+            return;
+        }
+    }
+    if (near > JC.R + 14) {
+        jcReset();
+        say('Jump Challenge cancelled (you left the course).');
+        return;
+    }
+    const s = '🦘 <b>Jump Challenge</b> ⏱ ' + jcFmt(JR.t) + '<br><small>Platform ' + (p ? p.i + 1 : '–') + '/' + JP.length + ' · 🚩 ' + (JR.cp == 14 ? 2 : JR.cp == 7 ? 1 : 0) + '/2 · Falls ' + JR.falls + ' · Best ' + best + '</small>';
+    el.style.display = 'block';
+    if (el.dataset.s !== s) {
+        el.dataset.s = s;
+        el.innerHTML = s;
+    }
+}
+
+// ===== Rogue: Stealth (5th ability, key 5) =====
+ICONS['Stealth'] = ['👤', '#3a2a5a'];
+const STEALTH_AB = { n: 'Stealth', cost: 0, cd: .3, stealth: 1, f: () => toggleStealth() };
+const PROWL_AB = { n: 'Prowl', cost: 0, cd: .3, stealth: 1, f: () => toggleStealth() };
+ICONS['Prowl'] = ['🌑', '#4a3a1a'];
+{
+    const baseCfg = cfgOf;
+    cfgOf = p => { const c = baseCfg(p); return p.cls == 'rogue' ? Object.assign({}, c, { ab: c.ab.concat([STEALTH_AB]) }) : c; };
+}
+function toggleStealth() {
+    if (P.stealth)
+        return stealthOff();
+    if (G.on || DU) {
+        P.cds[4] = 0;
+        return say('You cannot use Stealth in PvP.');
+    }
+    P.stealth = true;
+    // swap to see-through copies of the hero's materials (originals are kept and restored)
+    P.stM = [];
+    P.mesh.traverse(o => { if (o.isMesh && o.material && !o.userData.noSt) {
+        const orig = o.material, cl = orig.clone();
+        cl.transparent = true;
+        cl.opacity = .3;
+        cl.depthWrite = false;
+        o.material = cl;
+        P.stM.push([o, orig]);
+    } });
+    mobs.forEach(m => { if (!m.bot && !m.wb)
+        m.aggro = false; });
+    if (P.t && !P.t.wb && !P.t.bot)
+        P.t = null;
+    burst(P.pos, 0x6a4aaa, 16, 1);
+    float(P.pos, 'Stealth', '#c9b0ff');
+    if (P.lion)
+        say('<span style="color:#c9b0ff">🦁 You crouch low and prowl unseen. Monsters ignore you. Your next attack deals double damage!</span>');
+    else
+        say('<span style="color:#c9b0ff">👤 You vanish into the shadows. Monsters ignore you. Your next attack deals double damage!</span>');
+}
+function stealthOff(quiet) {
+    if (!P || !P.stealth)
+        return;
+    P.stealth = false;
+    const si = P.cfg && P.cfg.ab ? P.cfg.ab.findIndex(a => a.stealth) : -1;
+    if (si >= 0)
+        P.cds[si] = 3;
+    (P.stM || []).forEach(([o, m]) => { o.material.dispose(); o.material = m; });
+    P.stM = null;
+    if (!quiet) {
+        burst(P.pos, 0x6a4aaa, 10, 1);
+        say('<span style="color:#c9b0ff">👤 You leave stealth.</span>');
+    }
+}
+// ===== Admin: teleport by clicking the world map or the minimap =====
+function admTP(x, z) {
+    if (DG.on || G.on || DU)
+        return say('<span style="color:#4fc3ff">[R] You cannot teleport here.</span>');
+    x = Math.max(-WORLD + 2, Math.min(WORLD - 2, x));
+    z = Math.max(-WORLD + 2, Math.min(WORLD - 2, z));
+    burst(P.pos, 0x4fc3ff, 20, 1.5);
+    P.cast = null;
+    P.pos.set(x, 0, z);
+    P.gl = undefined;
+    P.onP = null;
+    P.jy = 0;
+    P.vy = 0;
+    P.t = null;
+    burst(P.pos, 0x4fc3ff, 24, 1.5);
+    float(P.pos, 'Teleport!', '#4fc3ff');
+    say('<span style="color:#4fc3ff">[R] Teleported to ' + Math.round(x) + ', ' + Math.round(z) + ' — ' + (Math.hypot(x, z) < TOWN ? 'Town' : ZONES[zoneAt(x, z)].e + ' ' + ZONES[zoneAt(x, z)].n) + '</span>');
+}
+function admMapTP() {
+    if (!ADM.tp)
+        admToggle('tp');
+    $('adm').style.display = 'none';
+    if (!mapOpen)
+        toggleMap();
+    say('<span style="color:#4fc3ff">[R] Click anywhere on the map to teleport there.</span>');
+}
+$('mc').addEventListener('click', e => {
+    if (!ADM.tp || !running)
+        return;
+    const c = $('mc'), r = c.getBoundingClientRect(), px = (e.clientX - r.left - c.clientLeft) / c.clientWidth * c.width, pz = (e.clientY - r.top - c.clientTop) / c.clientHeight * c.height, K = c.width / (WORLD * 2);
+    admTP(px / K - WORLD, pz / K - WORLD);
+    if (mapOpen)
+        toggleMap();
+});
+$('mm').addEventListener('click', e => {
+    if (!ADM.tp || !running)
+        return;
+    const c = $('mm'), r = c.getBoundingClientRect(), px = (e.clientX - r.left - c.clientLeft) / c.clientWidth * 120, pz = (e.clientY - r.top - c.clientTop) / c.clientHeight * 120;
+    admTP(P.pos.x + (px - 60) / .9, P.pos.z + (pz - 60) / .9);
+});
+setInterval(() => { const cur = ADM.tp ? 'crosshair' : ''; ['mm', 'mc'].forEach(i => { if ($(i).style.cursor !== cur)
+    $(i).style.cursor = cur; }); }, 500);
+
+// ===== Admin console: type commands, spawn dungeon bosses in the open world =====
+let admLog = ['Type <b>help</b> to see the commands.'], admLast = '', admHist = [], admHi = 0, admZones = [];
+const ADM_MODES = { aggressive: '😡 Aggressive — attacks everyone', passive: '😐 Passive — only fights back', friendly: '😇 Friendly — fights for you' };
+function admConsoleHTML() {
+    return `<div style="margin-top:14px;padding-top:10px;border-top:1px solid #7a5a22;text-align:left"><b style="color:var(--gold)">💻 Console</b> <small style="opacity:.8">— boss IDs: ${DG_BOSSES.map(b => `<span onclick="admFill('spawn ${b.id}')" style="cursor:pointer;color:#ff9a6a;text-decoration:underline">${b.id} = ${b.name} (Lv ${b.lvl})</span>`).join(' · ')}</small><div id="admo" style="margin:6px 0;height:96px;overflow-y:auto;background:#000c;border:1px solid #7a5a22;border-radius:4px;padding:4px 6px;font-family:Consolas,monospace;font-size:12px;line-height:1.35">${admLog.map(l => '<div>' + l + '</div>').join('')}</div><div style="display:flex;gap:6px"><input id="admc" value="${esc(admLast)}" placeholder="e.g. spawn 3   ·   spawn 2 passive   ·   spawn 1 friendly 2" autocomplete="off" spellcheck="false" style="flex:1;font-family:Consolas,monospace;font-size:13px;padding:6px 8px;background:#0b0804;color:#9dff7a;border:2px solid #7a5a22;border-radius:4px" onkeydown="admKey(event)"><button onclick="admRun()" style="padding:4px 14px;font-size:13px;margin:0">Run</button></div></div>`;
+}
+function admFill(s) { const i = $('admc'); if (i) {
+    i.value = s;
+    i.focus();
+} }
+function admKey(e) {
+    e.stopPropagation();
+    if (e.key == 'Enter')
+        admRun();
+    else if (e.key == 'Escape')
+        toggleAdm();
+    else if (e.key == 'ArrowUp' && admHist.length) {
+        admHi = Math.max(0, admHi - 1);
+        e.target.value = admHist[admHi];
+        e.preventDefault();
+    }
+    else if (e.key == 'ArrowDown' && admHist.length) {
+        admHi = Math.min(admHist.length, admHi + 1);
+        e.target.value = admHist[admHi] || '';
+        e.preventDefault();
+    }
+}
+function admOut(s) {
+    admLog.push(s);
+    if (admLog.length > 40)
+        admLog.shift();
+    const o = $('admo');
+    if (o) {
+        o.innerHTML = admLog.map(l => '<div>' + l + '</div>').join('');
+        o.scrollTop = o.scrollHeight;
+    }
+}
+function admRun() {
+    const inp = $('admc'), raw = (inp ? inp.value : '').trim();
+    if (!raw)
+        return;
+    admHist.push(raw);
+    admHi = admHist.length;
+    admLast = '';
+    if (inp)
+        inp.value = '';
+    admOut('<span style="color:#9dff7a">&gt; ' + esc(raw) + '</span>');
+    const a = raw.toLowerCase().split(/\s+/), cmd = a[0];
+    if (cmd == 'help' || cmd == '?') {
+        admOut('<b>spawn &lt;id&gt; [passive|friendly] [count]</b> — spawn a boss in front of you (aggressive by default)');
+        admOut('<b>bosses</b> — list boss IDs · <b>clear</b> — remove spawned bosses');
+        admOut('<b>tp &lt;x&gt; &lt;z&gt;</b> — teleport · <b>heal</b> — full health &amp; mana · <b>level &lt;n&gt;</b> — add levels');
+    }
+    else if (cmd == 'bosses' || cmd == 'list') {
+        DG_BOSSES.forEach(b => admOut(b.id + ' — ' + b.name + ' (Lv ' + b.lvl + ')'));
+    }
+    else if (cmd == 'spawn') {
+        const id = parseInt(a[1], 10), B = DG_BOSSES.find(b => b.id === id);
+        if (!B)
+            return admOut('<span style="color:#f77">Unknown boss id. Use: ' + DG_BOSSES.map(b => b.id).join(', ') + ' (type <b>bosses</b>)</span>');
+        if (DG.on || G.on || DU)
+            return admOut('<span style="color:#f77">You cannot spawn bosses inside dungeons or PvP.</span>');
+        const mode = a.includes('passive') ? 'passive' : a.includes('friendly') || a.includes('ally') ? 'friendly' : 'aggressive';
+        const n = Math.max(1, Math.min(5, parseInt(a.slice(2).find(x => /^\d+$/.test(x)) || '1', 10)));
+        for (let i = 0; i < n; i++)
+            admSpawnBoss(B, mode, i, n);
+        admOut('<span style="color:#ffd24a">Spawned ' + (n > 1 ? n + '× ' : '') + B.name + ' — ' + ADM_MODES[mode] + '</span>');
+    }
+    else if (cmd == 'clear' || cmd == 'despawn') {
+        const L = mobs.filter(m => m.adm);
+        L.forEach(m => { burst(m.pos, 0x4fc3ff, 16, 1.5); S.remove(m.mesh); if (P.t === m)
+            P.t = null; });
+        mobs = mobs.filter(m => !m.adm);
+        admOut(L.length ? 'Removed ' + L.length + ' spawned boss' + (L.length > 1 ? 'es' : '') + '.' : 'No spawned bosses to remove.');
+    }
+    else if (cmd == 'tp') {
+        const x = parseFloat(a[1]), z = parseFloat(a[2]);
+        if (isNaN(x) || isNaN(z))
+            return admOut('<span style="color:#f77">Usage: tp &lt;x&gt; &lt;z&gt; (e.g. tp 0 0 = town)</span>');
+        admTP(x, z);
+        admOut('Teleported to ' + Math.round(x) + ', ' + Math.round(z) + '.');
+    }
+    else if (cmd == 'heal') {
+        P.hp = P.max;
+        P.mp = P.mmax;
+        burst(P.pos, 0x66ff88, 20, 1.5);
+        admOut('Fully healed.');
+    }
+    else if (cmd == 'level' || cmd == 'lvl') {
+        const n = parseInt(a[1], 10);
+        if (!(n > 0))
+            return admOut('<span style="color:#f77">Usage: level &lt;n&gt; (e.g. level 5)</span>');
+        admLvl(Math.min(100, n));
+        admOut('Now level ' + P.lvl + '.');
+    }
+    else
+        admOut('<span style="color:#f77">Unknown command "' + esc(cmd) + '". Type <b>help</b>.</span>');
+}
+function admSpawnBoss(B, mode, i, n) {
+    const a = P.mesh.rotation.y + (n > 1 ? (i - (n - 1) / 2) * .6 : 0), d = 14, x = P.pos.x + Math.sin(a) * d, z = P.pos.z + Math.cos(a) * d;
+    const mesh = mobMesh(B.ty);
+    mesh.position.set(x, groundH(x, z), z);
+    S.add(mesh);
+    mesh.traverse(q => { if (q.isMesh && q.material.isMeshLambertMaterial)
+        q.castShadow = true; });
+    const hp = Math.round((30 + B.lvl * 22) * B.hpm);
+    const m = { mesh, pos: mesh.position, hx: x, hz: z, lvl: B.lvl, ty: B.ty, hp, max: hp, cd: 1, slow: 0, aggro: false, dm: B.dm, spd: B.spd, boss: B.id, rng: B.rng, acd: B.acd, adm: mode, lunge: 0, t1: 4, tg: null };
+    m.name = B.name + (mode == 'friendly' ? ' 😇' : mode == 'passive' ? ' 😐' : ' 😡');
+    decorBoss(m);
+    mobs.push(m);
+    burst(m.pos, mode == 'friendly' ? 0x66ff88 : 0xff4422, 30, 2);
+}
+// who may this spawned boss fight?
+function admFoes(m) {
+    const L = [], pOK = !P.dead && !P.stealth && !ADM.ignore;
+    if (m.adm == 'friendly') {
+        mobs.forEach(o => { if (o !== m && !o.wb && !o.bot && !(o.adm == 'friendly') && !(o.adm == 'passive' && !o.aggro))
+            L.push(o); });
+        return L;
+    }
+    if (m.adm == 'passive') {
+        if (m.aggro && pOK)
+            L.push(P);
+        if (m.hitBy && mobs.includes(m.hitBy))
+            L.push(m.hitBy);
+        return L;
+    }
+    if (pOK)
+        L.push(P);
+    wbots.forEach(b => { if (!b.dead)
+        L.push(b); });
+    mobs.forEach(o => { if (o !== m && !o.wb && !o.bot && o.adm != 'aggressive')
+        L.push(o); });
+    return L;
+}
+function admHurt(m, tg, d) {
+    if (tg === P)
+        return foeHit(P, d, m);
+    if (tg.wb)
+        return wbHurt(tg, d);
+    if (tg.adm) {
+        tg.hitBy = m;
+        tg.aggro = tg.aggro || tg.adm != 'friendly';
+    }
+    tg.hp -= d;
+    float(tg.pos, d, m.adm == 'friendly' ? '#9dff7a' : '#ff9a6a');
+    if (tg.hp <= 0)
+        kill(tg);
+}
+function admZone(m, x, z, r, col, delay, dmg, kind) {
+    const g = new THREE.Group(), disc = new THREE.Mesh(new THREE.CircleGeometry(r, 36), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .2, depthWrite: false }));
+    disc.rotation.x = -PI / 2;
+    g.add(disc);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r - .3, r, 40), new THREE.MeshBasicMaterial({ color: col, side: 2 }));
+    ring.rotation.x = -PI / 2;
+    g.add(ring);
+    g.position.set(x, groundH(x, z) + .15, z);
+    S.add(g);
+    admZones.push({ g, disc, t: delay, max: delay, x, z, r, col, dmg, m, kind });
+}
+function admBossTick(dt, t) {
+    // telegraphed boss attacks
+    admZones = admZones.filter(z => {
+        z.t -= dt;
+        z.disc.material.opacity = .12 + .38 * (1 - Math.max(0, z.t) / z.max);
+        if (z.t > 0)
+            return true;
+        if (mobs.includes(z.m))
+            admFoes(z.m).forEach(o => { if (Math.hypot(o.pos.x - z.x, o.pos.z - z.z) < z.r) {
+                admHurt(z.m, o, z.dmg);
+                if (o === P && z.kind == 'wail')
+                    P.slowT = 3.5;
+            } });
+        burst(new THREE.Vector3(z.x, groundH(z.x, z.z), z.z), z.col, 22, 2, .2);
+        S.remove(z.g);
+        return false;
+    });
+    if (!DG.on && (P.slowT || 0) > 0)
+        P.slowT = Math.max(0, P.slowT - dt);
+    let bf = null;
+    mobs.forEach(m => {
+        if (!m.adm)
+            return;
+        m.cd -= dt;
+        m.lunge = Math.max(0, (m.lunge || 0) - dt);
+        m.slow = Math.max(0, (m.slow || 0) - dt);
+        if (m.stun > 0) {
+            m.stun -= dt;
+            return;
+        }
+        // keep the current target while it's valid and close, otherwise pick the nearest foe
+        const foes = admFoes(m);
+        if (!m.tg || !foes.includes(m.tg) || m.tg.dead || m.tg.hp <= 0 || d3(m, m.tg) > 40) {
+            m.tg = null;
+            let bd = m.adm == 'aggressive' ? 26 : 34;
+            foes.forEach(o => { const dd = d3(m, o); if (dd < bd) {
+                bd = dd;
+                m.tg = o;
+            } });
+        }
+        const tg = m.tg, sp = (5 + m.lvl * .35) * (m.spd || 1) * (m.slow > 0 ? .4 : 1);
+        let mv = false;
+        if (tg) {
+            if (tg === P)
+                m.aggro = true;
+            const dd = d3(m, tg);
+            m.mesh.rotation.y = Math.atan2(tg.pos.x - m.pos.x, tg.pos.z - m.pos.z);
+            if (dd > (m.rng || 3)) {
+                const k = Math.min(dd, sp * dt) / dd;
+                m.pos.x += (tg.pos.x - m.pos.x) * k;
+                m.pos.z += (tg.pos.z - m.pos.z) * k;
+                mv = true;
+            }
+            else if (m.cd <= 0) {
+                m.cd = m.acd || 1.3;
+                m.lunge = .25;
+                const lv = tg === P ? P.lvl : tg.lvl || 1;
+                admHurt(m, tg, Math.max(1, Math.round((2 + m.lvl * 2.2 - lv * .4) * (m.dm || 1))));
+            }
+            // signature attacks, like in the dungeon
+            m.t1 -= dt;
+            if (m.t1 <= 0) {
+                if (m.boss == 1) {
+                    m.t1 = 9;
+                    admZone(m, m.pos.x, m.pos.z, 8, 0xff5533, 1.4, 55, 'slam');
+                }
+                else if (m.boss == 2) {
+                    m.t1 = 11;
+                    admZone(m, m.pos.x, m.pos.z, 15, 0xb06aff, 1.3, 48, 'wail');
+                }
+                else {
+                    m.t1 = 8;
+                    admZone(m, tg.pos.x, tg.pos.z, 5, 0xff7a1a, 1.7, 60, 'fire');
+                    for (let k = 0; k < 2; k++)
+                        admZone(m, tg.pos.x + rnd(-9, 9), tg.pos.z + rnd(-9, 9), 5, 0xff7a1a, 1.7, 60, 'fire');
+                }
+            }
+        }
+        else {
+            m.aggro = false;
+            // friendly bosses follow you around; others go back home
+            const hx = m.adm == 'friendly' ? P.pos.x + 4 : m.hx, hz = m.adm == 'friendly' ? P.pos.z - 4 : m.hz, dd = Math.hypot(hx - m.pos.x, hz - m.pos.z);
+            if (dd > (m.adm == 'friendly' ? 6 : .8)) {
+                const k = Math.min(dd, sp * .8 * dt) / dd;
+                m.pos.x += (hx - m.pos.x) * k;
+                m.pos.z += (hz - m.pos.z) * k;
+                m.mesh.rotation.y = Math.atan2(hx - m.pos.x, hz - m.pos.z);
+                mv = true;
+            }
+            if (m.adm == 'friendly' && dd > 60) {
+                m.pos.x = hx;
+                m.pos.z = hz;
+            }
+        }
+        if (m.boss == 2 && Math.random() < .3)
+            burst(m.pos, 0xb06aff, 1, .7, 1.8);
+        if (m.boss == 3 && Math.random() < .4)
+            burst(m.pos, 0xff7a1a, 1, 1.5, 3);
+        m.mv = mv ? 1 : 0;
+        m.pos.y = groundH(m.pos.x, m.pos.z) + (mv ? Math.abs(Math.sin(t * 8 + m.hx)) * .25 : 0);
+        m.mesh.scale.setScalar(1 + m.lunge * .6);
+        if ((m.aggro || m.adm == 'friendly' && tg) && d3(m, P) < 45 && (!bf || d3(m, P) < d3(bf, P)))
+            bf = m;
+    });
+    if (!DG.on) {
+        const el = $('bossf');
+        if (bf) {
+            const s = `<b style="color:${bf.adm == 'friendly' ? '#9dff7a' : '#ff9a6a'}">${esc(bf.name)}</b> <small>Lv ${bf.lvl}</small><div class="bar" style="height:14px"><i style="background:${bf.adm == 'friendly' ? '#2a9a4a' : '#c0392b'};width:${Math.max(0, bf.hp / bf.max * 100)}%"></i></div>`;
+            if (el.dataset.s !== s) {
+                el.dataset.s = s;
+                el.innerHTML = s;
+            }
+            el.style.display = 'block';
+        }
+        else
+            el.style.display = 'none';
+    }
+}
+
+// ----- Wildheart lion form -----
+{
+    const baseCfg2 = cfgOf;
+    cfgOf = p => p.cls == 'druid' && p.lion ? Object.assign({}, CL.druid, { ab: CL.druid.abL.concat([PROWL_AB]) }) : baseCfg2(p);
+}
+function lionMesh() {
+    const g = new THREE.Group(), L = c => new THREE.MeshLambertMaterial({ color: c }), B = c => new THREE.MeshBasicMaterial({ color: c });
+    const coat = L(0xd9a54a), light = L(0xf0d8a0), mane = L(0xa0521a), dark = L(0x6a3a14);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.7, 14, 10), coat), 0, 1.15, 0, g).scale.set(1, .82, 1.6);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.5, 10, 8), light), 0, .92, .1, g).scale.set(1, .6, 1.5);
+    const head = new THREE.Group();
+    head.position.set(0, 1.7, 1.05);
+    g.add(head);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.66, 14, 10), mane), 0, 0, -.12, head).scale.set(1.1, 1.1, .85);
+    for (let k = 0; k < 12; k++) {
+        const a = k / 12 * PI * 2, c = add(new THREE.Mesh(new THREE.ConeGeometry(.16, .5, 5), k % 2 ? mane : dark), Math.cos(a) * .62, Math.sin(a) * .62, -.2, head);
+        c.rotation.z = a - PI / 2;
+    }
+    add(new THREE.Mesh(new THREE.SphereGeometry(.42, 12, 10), coat), 0, 0, .18, head);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), light), 0, -.12, .5, head).scale.set(1.2, .8, .9);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 6), B(0x2a1a10)), 0, -.02, .7, head).scale.set(1.3, 1, 1);
+    [-1, 1].forEach(sd => {
+        add(new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 6), B(0x1a1208)), sd * .16, .1, .52, head);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.025, 5, 5), B(0xffffff)), sd * .16 - .02, .13, .58, head);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), coat), sd * .3, .42, .05, head).scale.set(1, 1, .5);
+    });
+    g.legs = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => { const l = new THREE.Group(); l.position.set(sx * .36, .95, sz * .7); add(new THREE.Mesh(new THREE.BoxGeometry(.26, .9, .28), coat), 0, -.45, 0, l); add(new THREE.Mesh(new THREE.SphereGeometry(.17, 8, 6), light), 0, -.9, .06, l).scale.set(1, .6, 1.2); g.add(l); return l; });
+    g.tail = new THREE.Group();
+    g.tail.position.set(0, 1.3, -1.05);
+    g.add(g.tail);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.05, .07, 1.1, 6), coat), 0, -.1, -.5, g.tail).rotation.x = -1.1;
+    add(new THREE.Mesh(new THREE.SphereGeometry(.15, 8, 6), dark), 0, -.45, -1.0, g.tail);
+    g.head = head;
+    g.scale.setScalar(.8);
+    g.traverse(o => { if (o.isMesh)
+        o.castShadow = true; });
+    return g;
+}
+function lionToggle() {
+    if (P.cls != 'druid')
+        return;
+    if (P.stealth)
+        stealthOff(true);
+    P.lion = !P.lion;
+    if (P.lion) {
+        P.lionHid = P.mesh.children.filter(c => c.visible);
+        P.lionHid.forEach(c => c.visible = false);
+        P.lionM = lionMesh();
+        P.mesh.add(P.lionM);
+        say('<span style="color:#ffd27a">🦁 You take the form of a mighty lion! Faster, tougher, and sharp claws.</span>');
+    }
+    else {
+        if (P.lionM)
+            P.mesh.remove(P.lionM);
+        P.lionM = null;
+        (P.lionHid || []).forEach(c => c.visible = true);
+        P.lionHid = null;
+        say('<span style="color:#9dff6a">🧝 You return to your elf form.</span>');
+    }
+    burst(P.pos, 0x7be04a, 22, 1.5);
+    burst(P.pos, 0xffd27a, 12, 1.2);
+    P.cfg = cfgOf(P);
+    P.cds = [0, 0, 0, 1.5, 0];
+    buildHB();
+    if (P.lion)
+        say('<span style="color:#c9b0ff">Tip: press 5 to Prowl (lion stealth).</span>');
+}
+function lionTick(dt, t) {
+    const g = P.lionM;
+    if (!g)
+        return;
+    const mv = P.mv && !P.dead, sw = mv ? Math.sin(t * 13) * .7 : 0, air = (P.jy || 0) > .05;
+    g.legs.forEach((l, j) => l.rotation.x = air ? (j < 2 ? -.7 : .6) : (j == 0 || j == 3) ? sw : -sw);
+    g.tail.rotation.y = Math.sin(t * (mv ? 9 : 2.5)) * .35;
+    g.tail.rotation.x = mv ? .3 : 0;
+    g.head.position.y = 1.7 + (mv ? Math.abs(Math.sin(t * 13)) * .06 : Math.sin(t * 2) * .02);
+    g.head.rotation.x = P.sw > 0 ? -Math.sin(P.sw / .3 * PI) * .5 : 0;
+    g.position.y = mv ? Math.abs(Math.sin(t * 13)) * .05 : 0;
+}
+
+// ===== New mounts: Giant Spider, Stone Golem, Witch's Broom, Water Elemental =====
+MOUNTS.push(
+    { n: 'Giant Spider', e: '🕷️', lvl: 0, sp: 2.2, col: 0x4a3a5a, fly: 0, custom: 'spider' },
+    { n: 'Stone Golem', e: '🗿', lvl: 0, sp: 1.9, col: 0x8a8a80, fly: 0, custom: 'golem' },
+    { n: 'Flying Broom', e: '🧹', lvl: 0, sp: 2.5, col: 0xa0703a, fly: 1, custom: 'broom' },
+    { n: 'Water Elemental', e: '🌊', lvl: 0, sp: 2.3, col: 0x2a8ad8, fly: 0, custom: 'water' }
+);
+function mountMesh(d) {
+    const g = d.custom == 'spider' ? mtSpider(d) : d.custom == 'golem' ? mtGolem(d) : d.custom == 'broom' ? mtBroom(d) : d.custom == 'water' ? mtWater(d) : mountMesh2(d);
+    if (d.custom)
+        g.traverse(o => { if (o.isMesh && !o.material.transparent)
+            o.castShadow = true; });
+    return g;
+}
+const MTL = (c, e, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c, emissive: e || 0 }, o || {}));
+// ----- Giant Spider: 8 legs walking in two alternating sets of four -----
+function mtSpider(d) {
+    const g = new THREE.Group(), root = new THREE.Group(), body = MTL(0x4a3a5a), dark = MTL(0x2a2030), stripe = MTL(0xb08ad8, 0x2a1a40), eye = new THREE.MeshBasicMaterial({ color: 0x9affea });
+    g.add(root);
+    const ab = add(new THREE.Mesh(new THREE.SphereGeometry(.95, 16, 12), body), 0, 1.45, -1.15, root);
+    ab.scale.set(1.05, .85, 1.25);
+    for (let k = 0; k < 3; k++)
+        add(new THREE.Mesh(new THREE.TorusGeometry(.62 - k * .12, .07, 6, 20), stripe), 0, 1.75 - k * .05, -1.0 - k * .42, root).rotation.x = 1.25;
+    add(new THREE.Mesh(new THREE.SphereGeometry(.62, 14, 10), body), 0, 1.2, .35, root).scale.set(1, .75, 1.1);
+    const head = add(new THREE.Mesh(new THREE.SphereGeometry(.4, 12, 10), dark), 0, 1.15, 1.0, root);
+    [[-.14, .16], [.14, .16], [-.26, .08], [.26, .08], [-.08, .26], [.08, .26], [-.2, -.02], [.2, -.02]].forEach(([x, y], k) => add(new THREE.Mesh(new THREE.SphereGeometry(k < 2 ? .085 : .05, 8, 6), eye), x, y, .34, head));
+    [-1, 1].forEach(sd => add(new THREE.Mesh(new THREE.ConeGeometry(.06, .3, 5), dark), sd * .12, -.28, .3, head).rotation.x = 2.6);
+    // a little saddle
+    add(new THREE.Mesh(new THREE.BoxGeometry(.75, .14, .9), MTL(0x7a3a2a)), 0, 1.68, -.15, root);
+    const legs = [];
+    [1, -1].forEach(sd => [.75, .3, -.15, -.6].forEach((z, k) => {
+        const yaw = sd > 0 ? [-.75, -.25, .25, .75][k] : PI + [.75, .25, -.25, -.75][k];
+        const hip = new THREE.Group();
+        hip.position.set(sd * .45, 1.2, z);
+        hip.rotation.y = yaw;
+        root.add(hip);
+        const swing = new THREE.Group(), lift = new THREE.Group();
+        hip.add(swing);
+        swing.add(lift);
+        limb(lift, { x: 0, y: 0, z: 0 }, { x: 1.05, y: .7, z: 0 }, body, .17);
+        add(new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), stripe), 1.05, .7, 0, lift);
+        limb(lift, { x: 1.05, y: .7, z: 0 }, { x: 1.75, y: -1.15, z: 0 }, dark, .13);
+        legs.push({ swing, lift, ph: (k + (sd > 0 ? 0 : 1)) % 2 ? PI : 0, yaw });
+    }));
+    g.ride = 1.78;
+    g.anim = (t, mv, jump) => {
+        const ph = t * 12, A = mv ? 1 : 0;
+        legs.forEach((L, i) => {
+            const p = ph + L.ph;
+            L.swing.rotation.y = mv ? Math.sin(p) * .38 : Math.sin(t * 1.5 + i) * .03;
+            L.lift.rotation.z = jump ? .45 : mv ? Math.max(0, Math.cos(p)) * .4 : Math.max(0, Math.sin(t * 2.3 + i * 1.7)) * .04;
+        });
+        root.position.y = jump ? .15 : mv ? Math.abs(Math.sin(ph)) * .06 : Math.sin(t * 2) * .02;
+        ab.rotation.x = Math.sin(t * (mv ? 6 : 1.5)) * .06;
+        head.rotation.y = Math.sin(t * .9) * .15;
+    };
+    return g;
+}
+// ----- Stone Golem: big walking statue, you ride on its shoulders -----
+function mtGolem(d) {
+    const g = new THREE.Group(), root = new THREE.Group(), st = new THREE.MeshLambertMaterial({ map: TM(rockT).map, color: 0xb8b4a8 }), st2 = MTL(0x8a8678), moss = MTL(0x4a8a3a), rune = new THREE.MeshBasicMaterial({ color: 0x7affe0 });
+    g.add(root);
+    const torso = new THREE.Group();
+    torso.position.y = 2.55;
+    root.add(torso);
+    add(new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.35, 1.05), st), 0, 0, 0, torso).rotation.y = .04;
+    add(new THREE.Mesh(new THREE.BoxGeometry(1.2, .5, .9), st2), 0, -.85, 0, torso);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.5, .5, .06), rune), 0, .1, .54, torso).rotation.z = PI / 4;
+    [[-.55, .55], [.6, .4], [.2, -.3]].forEach(([x, y]) => add(new THREE.Mesh(new THREE.SphereGeometry(.22, 6, 5), moss), x, y, .48, torso).scale.set(1, .6, .4));
+    add(new THREE.Mesh(new THREE.BoxGeometry(1.0, .25, 1.0), moss), 0, .72, -.05, torso);
+    const head = add(new THREE.Mesh(new THREE.BoxGeometry(.62, .55, .55), st), 0, .2, .75, torso);
+    [-1, 1].forEach(sd => add(new THREE.Mesh(new THREE.BoxGeometry(.13, .08, .05), rune), sd * .15, .05, .28, head));
+    const arms = [-1, 1].map(sd => {
+        const a = new THREE.Group();
+        a.position.set(sd * 1.15, .35, 0);
+        torso.add(a);
+        add(new THREE.Mesh(new THREE.DodecahedronGeometry(.42, 0), st2), 0, 0, 0, a);
+        add(new THREE.Mesh(new THREE.BoxGeometry(.5, 1.1, .5), st), 0, -.75, 0, a);
+        add(new THREE.Mesh(new THREE.DodecahedronGeometry(.42, 0), st), 0, -1.5, .05, a);
+        return a;
+    });
+    const legs = [-1, 1].map(sd => {
+        const l = new THREE.Group();
+        l.position.set(sd * .48, 1.55, 0);
+        root.add(l);
+        add(new THREE.Mesh(new THREE.BoxGeometry(.6, .8, .6), st2), 0, -.4, 0, l);
+        const kn = new THREE.Group();
+        kn.position.y = -.8;
+        l.add(kn);
+        add(new THREE.Mesh(new THREE.BoxGeometry(.66, .75, .66), st), 0, -.38, 0, kn);
+        add(new THREE.Mesh(new THREE.BoxGeometry(.75, .2, .9), st2), 0, -.7, .1, kn);
+        l.kn = kn;
+        return l;
+    });
+    g.ride = 3.35;
+    g.anim = (t, mv, jump) => {
+        const ph = t * 6.5, A = mv ? 1 : 0;
+        legs.forEach((l, i) => { const p = ph + i * PI; l.rotation.x = jump ? (i ? .4 : -.6) : Math.sin(p) * .45 * A; l.kn.rotation.x = jump ? .5 : Math.max(0, -Math.sin(p + .6)) * .6 * A; });
+        arms.forEach((a, i) => { a.rotation.x = mv ? -Math.sin(ph + i * PI) * .5 : Math.sin(t * 1.2 + i) * .04; a.rotation.z = (i ? -1 : 1) * .08; });
+        torso.rotation.z = mv ? Math.sin(ph) * .05 : 0;
+        torso.rotation.y = mv ? Math.sin(ph) * .06 : Math.sin(t * .5) * .03;
+        root.position.y = jump ? .2 : mv ? Math.abs(Math.cos(ph)) * .12 : Math.sin(t * 1.4) * .02;
+        head.rotation.y = Math.sin(t * .7) * .2;
+    };
+    return g;
+}
+// ----- Flying Broom: sparkly broomstick -----
+function mtBroom(d) {
+    const g = new THREE.Group(), root = new THREE.Group(), wood = MTL(0x8a5a2a), straw = MTL(0xe0c070), band = MTL(0xc03a3a);
+    g.add(root);
+    const y = .82;
+    add(new THREE.Mesh(new THREE.CylinderGeometry(.07, .08, 3.2, 8), wood), 0, y, .35, root).rotation.x = PI / 2;
+    add(new THREE.Mesh(new THREE.SphereGeometry(.11, 8, 6), wood), 0, y, 1.95, root);
+    const br = new THREE.Group();
+    br.position.set(0, y, -1.25);
+    root.add(br);
+    add(new THREE.Mesh(new THREE.ConeGeometry(.5, 1.5, 12, 1, true), straw), 0, 0, -.65, br).rotation.x = -PI / 2;
+    for (let k = 0; k < 10; k++) {
+        const a = k / 10 * PI * 2;
+        add(new THREE.Mesh(new THREE.CylinderGeometry(.025, .015, 1.5, 4), straw), Math.cos(a) * .33, Math.sin(a) * .33, -.75, br).rotation.x = PI / 2 + Math.sin(a) * .25;
+    }
+    add(new THREE.Mesh(new THREE.TorusGeometry(.16, .05, 6, 14), band), 0, 0, .05, br);
+    const star = add(new THREE.Mesh(new THREE.OctahedronGeometry(.12), new THREE.MeshBasicMaterial({ color: 0xffe48a })), 0, y + .25, 1.75, root);
+    g.ride = 1.0;
+    const wp = new THREE.Vector3();
+    g.anim = (t, mv) => {
+        root.rotation.x = mv ? -.08 + Math.sin(t * 4) * .02 : Math.sin(t * 1.5) * .03;
+        root.rotation.z = Math.sin(t * 1.3) * (mv ? .05 : .03);
+        br.rotation.y = Math.sin(t * (mv ? 9 : 3)) * .08;
+        br.rotation.x = Math.sin(t * (mv ? 7 : 2)) * .05;
+        star.rotation.y = t * 3;
+        if (Math.random() < (mv ? .5 : .15)) {
+            br.getWorldPosition(wp);
+            burst(wp, [0xffe48a, 0xff8fc8, 0x9adfff][(Math.random() * 3) | 0], 1, -.1, -.3);
+        }
+    };
+    return g;
+}
+// ----- Water Elemental: a flowing wave creature with bubbles -----
+function mtWater(d) {
+    const g = new THREE.Group(), root = new THREE.Group(), water = new THREE.MeshLambertMaterial({ color: 0x3aa0ff, emissive: 0x0a3a6a, transparent: true, opacity: .72 }), deep = new THREE.MeshLambertMaterial({ color: 0x1a6ad0, emissive: 0x062a5a, transparent: true, opacity: .8 }), foam = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x3a5a7a }), glow = new THREE.MeshBasicMaterial({ color: 0xbff8ff });
+    g.add(root);
+    const body = add(new THREE.Mesh(new THREE.SphereGeometry(.85, 18, 14), water), 0, 1.6, 0, root);
+    body.scale.set(.95, .8, 1.45);
+    const head = new THREE.Group();
+    head.position.set(0, 2.2, 1.2);
+    root.add(head);
+    add(new THREE.Mesh(new THREE.SphereGeometry(.42, 14, 10), water), 0, 0, 0, head).scale.set(1, .95, 1.3);
+    [-1, 1].forEach(sd => add(new THREE.Mesh(new THREE.SphereGeometry(.08, 8, 6), glow), sd * .2, .08, .42, head));
+    const mane = [];
+    for (let k = 0; k < 7; k++)
+        mane.push(add(new THREE.Mesh(new THREE.SphereGeometry(.17 - k * .012, 8, 6), foam), 0, 2.15 + Math.sin(k * .5) * .1 - k * .03, .95 - k * .3, root));
+    // swirling water column below instead of legs
+    const swirl = new THREE.Group();
+    swirl.position.y = .55;
+    root.add(swirl);
+    add(new THREE.Mesh(new THREE.ConeGeometry(.75, 1.4, 16, 1, true), deep), 0, .1, 0, swirl).rotation.x = PI;
+    const rings = [0, 1, 2].map(k => { const r = add(new THREE.Mesh(new THREE.TorusGeometry(.75 - k * .18, .07, 6, 22), foam), 0, -.4 + k * .35, 0, swirl); r.rotation.x = PI / 2; return r; });
+    const tail = new THREE.Group();
+    tail.position.set(0, 1.6, -1.15);
+    root.add(tail);
+    add(new THREE.Mesh(new THREE.ConeGeometry(.35, 1.4, 10), water), 0, 0, -.6, tail).rotation.x = -PI / 2 - .3;
+    add(new THREE.Mesh(new THREE.SphereGeometry(.2, 8, 6), foam), 0, -.25, -1.25, tail);
+    add(new THREE.Mesh(new THREE.BoxGeometry(.7, .12, .8), MTL(0x1a4a7a, 0x0a2040)), 0, 2.28, -.05, root);
+    g.ride = 2.32;
+    const wp = new THREE.Vector3();
+    g.anim = (t, mv, jump) => {
+        root.position.y = .15 + Math.sin(t * (mv ? 5 : 2)) * .1;
+        root.rotation.x = mv ? -.07 : 0;
+        swirl.rotation.y = t * (mv ? 7 : 3);
+        rings.forEach((r, k) => { r.scale.setScalar(1 + Math.sin(t * 4 + k) * .08); });
+        body.scale.set(.95 + Math.sin(t * 3) * .03, .8 + Math.sin(t * 3 + 1) * .03, 1.45);
+        mane.forEach((m, k) => { m.position.x = Math.sin(t * 5 - k * .8) * .1; m.position.y = 2.15 - k * .03 + Math.sin(t * 6 - k) * .05; });
+        tail.rotation.y = Math.sin(t * (mv ? 7 : 2.5)) * .35;
+        head.rotation.x = Math.sin(t * 1.5) * .06;
+        if (Math.random() < (mv ? .7 : .25)) {
+            swirl.getWorldPosition(wp);
+            burst(wp, Math.random() < .5 ? 0xbff8ff : 0x3aa0ff, 1, mv ? .8 : .5, -.4);
+        }
+    };
+    return g;
+}
+
+function heroSwing(m, sw) {
+    if (m.xSlash)
+        return m.xSlash(sw);
+    m.w.rotation.x = sw > 0 ? -Math.sin(sw / .3 * 3.14) * 1.8 : 0;
 }
