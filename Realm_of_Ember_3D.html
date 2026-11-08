@@ -1078,6 +1078,8 @@ function mkDagger() {
 }
 function buildDaggers(g, w) {
     w.visible = false;
+    if (g.rarm)
+        g.rarm.visible = false;
     const skin = new THREE.MeshLambertMaterial({ color: 0x2a1a22 }), armM = M(g.col);
     const mkArm = sd => {
         const piv = new THREE.Group(), inn = new THREE.Group();
@@ -1102,36 +1104,210 @@ function buildDaggers(g, w) {
     g.w = { rotation: { set x(v) { ra.rotation.x = -v * .55; ra.position.z = -v * .08; if (v)
                 g.arm.rotation.x = v * -.4; }, get x() { return ra.rotation.x; } } };
 }
-function hero(col, cls) {
-    const g = new THREE.Group();
-    add(new THREE.Mesh(new THREE.CylinderGeometry(.5, .6, 1.5, 10), M(col)), 0, 1.1, 0, g);
-    add(new THREE.Mesh(new THREE.SphereGeometry(.42, 12, 10), M(0xf0c8a0)), 0, 2.2, 0, g);
-    const w = new THREE.Group();
-    g.add(w);
-    w.position.set(.8, 1.4, .2);
-    if (cls == 'mage' || cls == 'priest' || cls == 'warlock') {
-        add(new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 2.4, 6), M(0x5a3a1a)), 0, .3, 0, w);
-        g.orb = add(new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), new THREE.MeshBasicMaterial({ color: { priest: 0xffee88, warlock: 0xaa44ff }[cls] || 0xff7722 })), 0, 1.6, 0, w);
-        add(new THREE.Mesh(new THREE.ConeGeometry(.55, .9, 10), M(col)), 0, 2.6, 0, g);
+const SKIN = [0xf0c8a0, 0xe0b088, 0xc48a5a, 0x9a6a44, 0x6a4630, 0xf4d8c0], HAIRC = [0x2a1a10, 0x5a3a1a, 0xa07030, 0xd8b860, 0x1a1a22, 0x8a2a1a, 0xc8c8d0];
+const HLOOK = {
+    warrior: { kind: 'plate', cloth: 0xb03a2c, trim: 0xe8b84a, metal: 0xaab4c2 },
+    paladin: { kind: 'plate', cloth: 0xf2f2f8, trim: 0xe8b84a, metal: 0xe6dcc0 },
+    mage: { kind: 'robe', cloth: 0x3b63c9, trim: 0xe8b84a, hair: 0xd0d0d8 },
+    priest: { kind: 'robe', cloth: 0xf0f0f4, trim: 0xe8b84a, hair: 0xe8c860 },
+    warlock: { kind: 'robe', cloth: 0x4a1a6a, trim: 0x8a4aba, hair: 0x181018 },
+    rogue: { kind: 'leather', cloth: 0x2a2438, trim: 0x8a7ab0, leather: 0x3a2a30, hair: 0x181820 },
+    hunter: { kind: 'leather', cloth: 0x3f6a30, trim: 0xb08a50, leather: 0x6a4a2a }
+};
+function hero(col, cls, seed) {
+    const g = new THREE.Group(), sd = seed ? [...String(seed)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) : Math.floor(Math.random() * 1e9);
+    const LK = HLOOK[cls] || HLOOK.warrior, kind = LK.kind, hairC = LK.hair != null ? LK.hair : HAIRC[(sd >> 4) % HAIRC.length];
+    const L = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0 });
+    const mt = { skin: L(SKIN[sd % SKIN.length]), cloth: L(LK.cloth), trim: L(LK.trim, 0x2a1c06), metal: L(LK.metal || 0x8a8a96, 0x10141a), leather: L(LK.leather || 0x4a3020), dark: L(0x1c1824), hair: L(hairC), white: L(0xffffff), eye: L(0x1a1410) };
+    const cyl = (rt, rb, h, x, y, z, m, p, sx, sz, seg) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 10), m); o.position.set(x, y, z); if (sx)
+        o.scale.set(sx, 1, sz || sx); (p || g).add(o); return o; };
+    const bx = (w, h, d, x, y, z, m, p) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); (p || g).add(o); return o; };
+    const sp = (r, x, y, z, m, p, sx, sy, sz) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), m); o.position.set(x, y, z); if (sx)
+        o.scale.set(sx, sy, sz); (p || g).add(o); return o; };
+    const cone = (r, h, x, y, z, m, p, rz, rx) => { const o = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), m); o.position.set(x, y, z); o.rotation.set(rx || 0, 0, rz || 0); (p || g).add(o); return o; };
+    // ---------- torso (children[0], bobs at y=1.1) ----------
+    const T = new THREE.Group();
+    T.position.y = 1.1;
+    g.add(T);
+    const bodyM = kind == 'plate' ? mt.metal : kind == 'leather' ? mt.leather : mt.cloth;
+    cyl(.5, .42, .78, 0, .42, 0, bodyM, T, 1, .68, 12);
+    cyl(.4, .38, .44, 0, -.08, 0, mt.cloth, T, 1, .7, 12);
+    cyl(.44, .44, .12, 0, -.28, 0, mt.leather, T, 1, .72, 12);
+    bx(.16, .13, .06, 0, -.28, .3, mt.trim, T);
+    cyl(.17, .2, .24, 0, .86, 0, mt.skin, T, 1, 1, 8);
+    if (kind == 'plate') {
+        bx(.1, .66, .07, 0, .42, .33, mt.trim, T);
+        [-1, 1].forEach(s => {
+            sp(.3, s * .64, .78, 0, mt.metal, T, 1, .72, 1);
+            sp(.22, s * .66, .9, 0, mt.trim, T, 1, .5, 1);
+            if (cls == 'warrior')
+                cone(.09, .4, s * .7, 1.12, 0, mt.metal, T, -s * .35);
+        });
+        cyl(.3, .34, .16, 0, .84, 0, mt.metal, T, 1, 1, 10);
+        bx(.52, .8, .06, 0, -.7, .3, mt.cloth, T);
+        bx(.52, .06, .07, 0, -1.1, .3, mt.trim, T);
+        bx(.52, .8, .06, 0, -.7, -.3, mt.cloth, T);
+        cyl(.46, .58, .3, 0, -.46, 0, mt.metal, T, 1, .78, 12);
+    }
+    else if (kind == 'robe') {
+        cyl(.5, .8, 1.05, 0, -.62, 0, mt.cloth, T, 1, .85, 14);
+        const hem = new THREE.Mesh(new THREE.TorusGeometry(.79, .04, 6, 26), mt.trim);
+        hem.scale.set(1, .85, 1);
+        hem.rotation.x = Math.PI / 2;
+        hem.position.y = -1.12;
+        T.add(hem);
+        sp(.4, 0, .74, 0, mt.cloth, T, 1.45, .45, 1);
+        bx(.14, 1.0, .06, 0, -.62, .4, mt.trim, T);
     }
     else {
-        add(new THREE.Mesh(new THREE.BoxGeometry(.12, 1.5, .3), M(0xcfd6dd)), 0, .5, 0, w);
-        add(new THREE.Mesh(new THREE.BoxGeometry(.6, .6, .2), M(0x8a8a9a)), -1.4, 1.2, 0, g);
+        bx(.13, .95, .06, 0, .38, .3, mt.dark, T).rotation.z = .65;
+        cyl(.46, .55, .45, 0, -.5, 0, mt.cloth, T, 1, .8, 12);
+        [-1, 1].forEach(s => sp(.22, s * .62, .8, 0, mt.leather, T, 1, .7, 1));
     }
-    g.legs = [-.25, .25].map(x => { const l = new THREE.Group(); l.position.set(x, .8, 0); add(new THREE.Mesh(new THREE.BoxGeometry(.3, .8, .3), M(0x3a2a1a)), 0, -.4, 0, l); g.add(l); return l; });
-    const arm = new THREE.Group();
-    arm.position.set(-.75, 1.7, 0);
-    add(new THREE.Mesh(new THREE.BoxGeometry(.25, .9, .25), M(col)), 0, -.4, 0, arm);
-    g.add(arm);
-    g.arm = arm;
-    if (cls == 'hunter') {
-        w.children.forEach(o => o.visible = false);
-        const bow = add(new THREE.Mesh(new THREE.TorusGeometry(.8, .05, 6, 12, Math.PI), M(0x6a4a1a)), 0, .5, 0, w);
+    const cape = (c, len) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(.9, len), new THREE.MeshLambertMaterial({ color: c, side: 2 })); m.position.set(0, .85 - len / 2, -.34); m.rotation.x = .08; T.add(m); };
+    if (cls == 'warrior')
+        cape(0x8a2a22, 1.7);
+    else if (cls == 'paladin')
+        cape(0xe8e4f4, 1.7);
+    else if (cls == 'warlock')
+        cape(0x2a1040, 1.6);
+    else if (cls == 'rogue')
+        cape(0x1c1828, 1.15);
+    else if (cls == 'hunter') {
+        cape(0x2e4a24, 1.2);
+        cyl(.13, .11, .7, .26, .5, -.42, mt.leather, T, 1, 1, 8).rotation.z = .25;
+        for (let k = 0; k < 3; k++) {
+            cyl(.025, .025, .35, .3 + k * .035, 1.0, -.42, mt.trim, T, 1, 1, 5);
+            bx(.05, .1, .02, .3 + k * .035, 1.2, -.42, L(0xc84a3a), T);
+        }
+    }
+    // ---------- head (children[1], bobs at y=2.2) ----------
+    const Hd = new THREE.Group();
+    Hd.position.y = 2.2;
+    g.add(Hd);
+    sp(.4, 0, 0, 0, mt.skin, Hd, .92, 1.02, .95);
+    [-1, 1].forEach(s => {
+        sp(.065, s * .14, .04, .34, mt.white, Hd, 1, 1, .6);
+        sp(.036, s * .14, .04, .385, cls == 'warlock' ? new THREE.MeshBasicMaterial({ color: 0x66ff66 }) : mt.eye, Hd);
+        sp(.08, s * .38, 0, 0, mt.skin, Hd, .5, 1, .8);
+    });
+    bx(.07, .1, .08, 0, -.03, .38, mt.skin, Hd);
+    bx(.16, .025, .04, 0, -.15, .36, L(0x7a3a30), Hd);
+    const hcap = (r, th, m, y) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 9, 0, Math.PI * 2, 0, Math.PI * th), m); o.position.set(0, y == null ? .04 : y, -.03); Hd.add(o); return o; };
+    if (kind == 'plate') {
+        hcap(.47, .58, mt.metal);
+        bx(.08, .3, .06, 0, -.02, .43, mt.metal, Hd);
+        bx(.78, .07, .5, 0, .13, .05, mt.trim, Hd);
+        [-1, 1].forEach(s => bx(.07, .36, .26, s * .38, -.1, .06, mt.metal, Hd));
+        if (cls == 'warrior')
+            bx(.1, .32, .75, 0, .55, -.05, mt.cloth, Hd);
+        else {
+            [-1, 1].forEach(s => { bx(.5, .1, .04, s * .5, .42, 0, mt.trim, Hd).rotation.z = s * .5; });
+            sp(.1, 0, .52, -.05, mt.white, Hd, 1, 1.5, 1);
+        }
+    }
+    else if (cls == 'mage') {
+        hcap(.42, .5, mt.hair);
+        cyl(.8, .8, .05, 0, .32, 0, mt.cloth, Hd, 1, 1, 18);
+        cyl(.44, .5, .12, 0, .38, 0, mt.trim, Hd, 1, 1, 14);
+        cone(.42, 1.0, 0, .9, 0, mt.cloth, Hd, .12);
+        cone(.2, .55, .17, 1.52, 0, mt.cloth, Hd, .55);
+        sp(.07, 0, .42, .46, mt.trim, Hd);
+        bx(.7, .6, .25, 0, -.12, -.3, mt.hair, Hd);
+    }
+    else if (cls == 'priest') {
+        hcap(.44, .56, mt.hair);
+        bx(.72, .85, .25, 0, -.28, -.3, mt.hair, Hd);
+        const cr = new THREE.Mesh(new THREE.TorusGeometry(.4, .035, 6, 24), mt.trim);
+        cr.rotation.x = Math.PI / 2;
+        cr.position.set(0, .22, 0);
+        Hd.add(cr);
+        sp(.07, 0, .22, .4, new THREE.MeshBasicMaterial({ color: 0xffee88 }), Hd);
+    }
+    else if (cls == 'warlock') {
+        hcap(.52, .66, mt.cloth);
+        cone(.1, .5, -.3, .5, 0, L(0xe0dac0), Hd, .5);
+        cone(.1, .5, .3, .5, 0, L(0xe0dac0), Hd, -.5);
+        bx(.7, .65, .3, 0, -.18, -.3, mt.cloth, Hd);
+    }
+    else if (cls == 'rogue') {
+        hcap(.5, .64, mt.cloth);
+        cone(.2, .5, 0, .1, -.5, mt.cloth, Hd, 0, -1.2);
+        bx(.58, .24, .22, 0, -.14, .27, mt.cloth, Hd);
+    }
+    else {
+        hcap(.46, .5, mt.leather);
+        bx(.62, .06, .5, 0, .14, .12, mt.leather, Hd);
+        bx(.06, .5, .04, .3, .5, -.05, L(0xc84a3a), Hd).rotation.z = -.5;
+        bx(.7, .6, .2, 0, -.1, -.28, mt.hair, Hd);
+    }
+    if (kind != 'plate' && cls != 'mage' && cls != 'priest' && cls != 'warlock' && cls != 'rogue')
+        hcap(.43, .55, mt.hair);
+    // ---------- arms ----------
+    const sleeve = kind == 'plate' ? mt.metal : kind == 'leather' ? mt.leather : mt.cloth, fore = kind == 'robe' ? mt.cloth : kind == 'plate' ? mt.metal : mt.leather;
+    const mkA = pose => { const a = new THREE.Group(); limb(a, { x: 0, y: 0, z: 0 }, pose.e, sleeve, .26); limb(a, pose.e, pose.h, fore, .23); sp(.13, pose.h.x, pose.h.y, pose.h.z, kind == 'plate' ? mt.metal : mt.skin, a); return a; };
+    const la = mkA({ e: { x: 0, y: -.46, z: .08 }, h: { x: 0, y: -.88, z: .3 } });
+    la.position.set(-.75, 1.7, 0);
+    g.add(la);
+    g.arm = la;
+    const ra = mkA({ e: { x: .06, y: -.5, z: .2 }, h: { x: .1, y: -.62, z: .62 } });
+    ra.position.set(.75, 1.7, 0);
+    g.add(ra);
+    g.rarm = ra;
+    // ---------- legs ----------
+    g.legs = [-1, 1].map(s => {
+        const l = new THREE.Group(), pants = kind == 'plate' ? mt.dark : kind == 'robe' ? mt.dark : mt.cloth, greave = kind == 'plate' ? mt.metal : mt.leather;
+        l.position.set(s * .25, .95, 0);
+        bx(.34, .46, .36, 0, -.23, 0, pants, l);
+        if (kind == 'plate')
+            sp(.16, 0, -.46, .08, mt.metal, l);
+        bx(.3, .4, .32, 0, -.66, 0, greave, l);
+        bx(.36, .2, .5, 0, -.85, .07, kind == 'robe' ? mt.dark : greave, l);
+        bx(.38, .06, .38, 0, -.74, 0, mt.trim, l);
+        g.add(l);
+        return l;
+    });
+    // ---------- weapon (held in the right hand) ----------
+    const w = new THREE.Group();
+    g.add(w);
+    w.position.set(.85, 1.08, .62);
+    if (cls == 'mage' || cls == 'priest' || cls == 'warlock') {
+        cyl(.05, .07, 2.5, 0, .3, 0, L(0x5a3a1a), w, 1, 1, 6);
+        g.orb = add(new THREE.Mesh(new THREE.SphereGeometry(.22, 10, 8), new THREE.MeshBasicMaterial({ color: { priest: 0xffee88, warlock: 0xaa44ff }[cls] || 0xff7722 })), 0, 1.65, 0, w);
+        if (cls == 'priest') {
+            const rg = new THREE.Mesh(new THREE.TorusGeometry(.36, .04, 6, 20), mt.trim);
+            rg.position.set(0, 1.65, -.05);
+            w.add(rg);
+        }
+        else if (cls == 'mage') {
+            const cr = new THREE.Mesh(new THREE.TorusGeometry(.3, .05, 6, 16, Math.PI * 1.4), mt.trim);
+            cr.rotation.z = Math.PI * .8;
+            cr.position.set(0, 1.62, -.02);
+            w.add(cr);
+        }
+        else
+            for (let k = 0; k < 3; k++)
+                cone(.06, .34, Math.cos(k * 2.09) * .24, 1.58, Math.sin(k * 2.09) * .24, L(0x2a1a30), w, 0, 0);
+    }
+    else if (cls == 'hunter') {
+        const bow = add(new THREE.Mesh(new THREE.TorusGeometry(.85, .05, 6, 16, Math.PI), L(0x6a4a1a)), 0, .1, 0, w);
         bow.rotation.z = -Math.PI / 2;
+        bx(.012, 1.7, .012, 0, .1, 0, mt.white, w);
     }
-    if (cls == 'rogue' || cls == 'hunter')
-        g.children.forEach(o => { if (o.geometry && o.geometry.type == 'BoxGeometry' && o.geometry.parameters.width == .6)
-            o.visible = false; });
+    else {
+        bx(.15, 1.3, .04, 0, .72, 0, L(0xd8e0ea, 0x141c28), w);
+        cone(.1, .3, 0, 1.52, 0, L(0xd8e0ea, 0x141c28), w, 0, 0);
+        bx(.5, .1, .12, 0, .06, 0, mt.trim, w);
+        cyl(.045, .05, .5, 0, -.2, 0, mt.leather, w, 1, 1, 6);
+        sp(.08, 0, -.48, 0, mt.trim, w);
+    }
+    if (cls == 'warrior' || cls == 'paladin') {
+        const inner = new THREE.Group();
+        w.children.slice().forEach(o => inner.add(o));
+        inner.rotation.set(.85, 0, .3);
+        inner.scale.setScalar(.78);
+        w.add(inner);
+    }
     g.w = w;
     g.cls = cls;
     g.col = col;
@@ -1396,7 +1572,7 @@ const MS = { 'Brown Horse': { t: 'fur', L: 2.4, lg: 1, nk: 1, mane: 0x20120a, ea
     'Shadow Panther': { t: 'spot', L: 2.2, lg: .8, nk: .5, ears: 1, tail: 1, eye: 0x66ff88, w: .9, snout: 1 }, 'Radiant Swan': { t: 'feather', L: 1.9, lg: .5, nk: 1.5, beak: 0xff9a2a, wing: 1, tail: 2 },
     'Great Bear': { t: 'fur', L: 2.1, lg: .8, nk: .2, ears: 1, snout: 1, w: 1.4, tail: 2 }, 'Golden Charger': { t: 'armor', L: 2.4, lg: 1, nk: 1, mane: 0xfff2b0, tail: 1, armor: 1, ears: 1 },
     'Hellsteed': { t: 'lava', L: 2.4, lg: 1, nk: 1, mane: 0xff5a1a, tail: 1, horns: 1, eye: 0xffee33, flame: 1 } };
-function mountMesh(d) {
+function mountMeshOld(d) {
     const s = MS[d.n] || MS['Brown Horse'], g = new THREE.Group(), w1 = s.w || 1, m = new THREE.MeshLambertMaterial({ map: mtex(s.t, d.col), emissive: d.cls ? d.col : 0, emissiveIntensity: .2 }), C = c => new THREE.MeshLambertMaterial({ color: c }), B = c => new THREE.MeshBasicMaterial({ color: c }), L = s.L, LG = s.lg + .4, by = LG + .45, W = 1.1 * w1, bx = (a, b, c, x, y, z, p, mt) => { const o = new THREE.Mesh(new THREE.BoxGeometry(a, b, c), mt || m); o.position.set(x, y, z); (p || g).add(o); o.castShadow = true; return o; }, sp = (r, sx, sy, sz, x, y, z, mt, p) => { const o = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), mt || m); o.scale.set(sx, sy, sz); o.position.set(x, y, z); (p || g).add(o); o.castShadow = true; return o; }, cn = (r, h, x, y, z, rx, rz, mt, p) => { const o = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), mt || m); o.position.set(x, y, z); o.rotation.set(rx || 0, 0, rz || 0); (p || g).add(o); return o; };
     sp(1, W / 2 + .15, .62, L / 2, 0, by, 0);
     sp(1, W / 2, .55, .5, 0, by + .05, L / 2 - .35);
@@ -2435,7 +2611,7 @@ function csBuild() {
     SH = [];
     const n = HEROES.length, pod = new THREE.MeshLambertMaterial({ map: stoneT, color: 0x9a9ab0 });
     HEROES.forEach((h, i) => {
-        const k = CL[h.cls], mesh = hero(k.col, h.cls);
+        const k = CL[h.cls], mesh = hero(k.col, h.cls, h.id);
         if (SPECS[h.cls])
             applySpec(mesh, h.sp || SPECS[h.cls][1][0]);
         const grp = new THREE.Group(), x = (i - (n - 1) / 2) * CSP;
@@ -2630,11 +2806,12 @@ function limb(g, a, b, mat, th) {
 function buildGS(g) {
     const holy = g.cls == 'paladin', L = c => new THREE.MeshLambertMaterial(c), B = c => new THREE.MeshBasicMaterial({ color: c });
     const steel = L({ color: 0xe4ebf3, emissive: holy ? 0x5a4a14 : 0x1c2a44 }), edge = L({ color: 0xffffff, emissive: 0x555555 }), gold = L({ color: 0xe8b84a, emissive: 0x3a2a08 }), leather = L({ color: 0x3a2412 }), glow = B(holy ? 0x66ddff : 0xff7a2a);
-    const gs = new THREE.Group(), sw = new THREE.Group(), th = .32;
+    const gs = new THREE.Group(), sw = new THREE.Group(), th = .55, ph = .28, k = .78;
     gs.position.set(0, 1.7, .2);
     g.add(gs);
     sw.position.set(0, -.3, .62);
-    sw.rotation.x = th;
+    sw.rotation.set(th, 0, ph);
+    sw.scale.setScalar(k);
     gs.add(sw);
     add(new THREE.Mesh(new THREE.BoxGeometry(.26, 2.6, .07), steel), 0, 1.6, 0, sw);
     add(new THREE.Mesh(new THREE.BoxGeometry(.07, 2.4, .09), edge), 0, 1.55, 0, sw);
@@ -2652,9 +2829,8 @@ function buildGS(g) {
     for (let i = 0; i < 4; i++)
         add(new THREE.Mesh(new THREE.TorusGeometry(.07, .015, 5, 10), gold), 0, -.5 + i * .2, 0, sw).rotation.x = Math.PI / 2;
     add(new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8), gold), 0, -.66, 0, sw);
-    const H = y => ({ x: 0, y: -.3 + y * Math.cos(th), z: .62 + y * Math.sin(th) }), hl = H(-.42), hr = H(-.05), armM = M(g.col);
-    hl.x = -.03;
-    hr.x = .03;
+    const dir = { x: -Math.sin(ph), y: Math.cos(ph) * Math.cos(th), z: Math.cos(ph) * Math.sin(th) };
+    const H = y => ({ x: y * k * dir.x, y: -.3 + y * k * dir.y, z: .62 + y * k * dir.z }), hl = H(-.42), hr = H(-.05), armM = M(g.col);
     [[-1, hl], [1, hr]].forEach(([s, h]) => {
         const sh = { x: s * .62, y: .05, z: -.2 };
         limb(gs, sh, h, armM, .24);
@@ -2673,7 +2849,7 @@ function buildShield(g) {
     add(new THREE.Mesh(new THREE.SphereGeometry(.16, 10, 8), gold), 0, 0, .1, sh);
     add(new THREE.Mesh(new THREE.BoxGeometry(.1, .8, .05), gold), 0, 0, .08, sh);
     add(new THREE.Mesh(new THREE.BoxGeometry(.8, .1, .05), gold), 0, 0, .08, sh);
-    sh.position.set(-.95, 1.2, .35);
+    sh.position.set(-.98, 1.05, .42);
     sh.rotation.y = -.35;
     g.add(sh);
     g.shield = sh;
@@ -2701,6 +2877,8 @@ function applySpec(g, spec) {
     g.w0.visible = !melee;
     g.shield.visible = !melee;
     g.arm.visible = !melee;
+    if (g.rarm)
+        g.rarm.visible = !melee;
     g.w = melee ? g.gsw : g.w0;
 }
 // ===== Specializations: warrior/paladin (melee|tank), priest (damage|heal) =====
@@ -3655,6 +3833,466 @@ function renderDg() {
     const inD = DG.on, low = P && P.lvl < 6;
     $('dgw').innerHTML = `<div class="mp" style="min-width:min(520px,92vw);text-align:center"><b style="color:var(--gold)">🏰 Dungeons</b><span onclick="toggleDg()" style="float:right;cursor:pointer">✕</span><div style="margin:12px 0;padding:12px;border:2px solid #7a5a22;border-radius:8px;background:radial-gradient(circle at 50% 0,#3a1a4a,#0a0610 80%);text-align:left"><div style="font-size:18px;color:#d9b8ff"><b>The Crypt of Ashes</b></div><div style="font-size:12px;opacity:.85;margin:4px 0 8px">A haunted crypt beneath the meadow. Recommended level 7+. Monsters here are stronger than outside.</div>${DG_BOSSES.map(b => `<div style="font-size:13px;margin:3px 0">${inD && DG.bossDown.has(b.id) ? '✔' : '☠'} <b>${b.name}</b> <small style="opacity:.75">· Lv ${b.lvl}</small></div>`).join('')}<div style="font-size:12px;opacity:.8;margin-top:6px">3 bosses · about 60 monsters${low ? '<br><span style="color:#ff9a6a">⚠ You are below the recommended level.</span>' : ''}</div></div>${inD ? '<button onclick="leaveDungeon();toggleDg()">🚪 Leave the Dungeon</button>' : '<button onclick="enterDungeon()">⚔ Enter the Dungeon</button>'}</div>`;
 }
+// ===== Mounts v2: proper quadruped / bird / dragon anatomy with animation =====
+const MH = {
+    mat: (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {})),
+    bas: c => new THREE.MeshBasicMaterial({ color: c }),
+    mesh(g, parent, x, y, z, mat, sx, sy, sz) { const m = new THREE.Mesh(g, mat); m.position.set(x, y, z); if (sx)
+        m.scale.set(sx, sy, sz); (parent).add(m); m.castShadow = true; return m; },
+    sph(r, parent, x, y, z, mat, sx, sy, sz) { return MH.mesh(new THREE.SphereGeometry(r, 12, 9), parent, x, y, z, mat, sx, sy, sz); },
+    cyl(rt, rb, h, parent, x, y, z, mat, seg) { return MH.mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 9), parent, x, y, z, mat); },
+    box(w, h, d, parent, x, y, z, mat) { return MH.mesh(new THREE.BoxGeometry(w, h, d), parent, x, y, z, mat); },
+    cone(r, h, parent, x, y, z, mat, rx, rz, seg) { const m = MH.mesh(new THREE.ConeGeometry(r, h, seg || 6), parent, x, y, z, mat); m.rotation.set(rx || 0, 0, rz || 0); return m; },
+    // tapered rod between two points
+    rod(parent, a, b, r1, r2, mat, seg) { const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, len = Math.hypot(dx, dy, dz) || 1e-3; const m = MH.mesh(new THREE.CylinderGeometry(r2, r1, len, seg || 8), parent, (a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, mat); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx / len, dy / len, dz / len)); return m; },
+    // jointed leg hanging from a hip group; returns hip group (userData holds base angles)
+    leg(parent, x, y, z, o) {
+        const hip = new THREE.Group(), knee = new THREE.Group();
+        hip.position.set(x, y, z);
+        parent.add(hip);
+        MH.sph(o.r1 * 1.08, hip, 0, 0, 0, o.mat, 1, 1, 1.15);
+        MH.cyl(o.r1, o.r2, o.u, hip, 0, -o.u / 2, 0, o.mat);
+        knee.position.y = -o.u;
+        hip.add(knee);
+        MH.sph(o.r2 * 1.1, knee, 0, 0, 0, o.mat);
+        MH.cyl(o.r2 * .92, o.r3, o.l, knee, 0, -o.l / 2, 0, o.lmat || o.mat);
+        const fy = -o.l;
+        if (o.foot == 'paw') {
+            MH.sph(o.r3 * 1.7, knee, 0, fy - o.r3 * .35, o.r3 * .8, o.fmat || o.mat, 1, .55, 1.5);
+            for (let k = -1; k <= 1; k++)
+                MH.cone(.035, .14, knee, k * o.r3 * .75, fy - o.r3 * .55, o.r3 * 2.1, o.cmat || MH.mat(0xe8e0d0), Math.PI / 2 + .4);
+        }
+        else if (o.foot == 'talon') {
+            MH.sph(o.r3 * 1.3, knee, 0, fy, o.r3, o.fmat || o.mat, 1, .6, 1.4);
+            for (let k = -1; k <= 1; k++)
+                MH.cone(.04, .3, knee, k * o.r3 * .9, fy - .03, o.r3 * 2.4, o.cmat || MH.mat(0x2a2218), Math.PI / 2 + .5);
+        }
+        else if (o.foot == 'cloven') {
+            [-1, 1].forEach(s => MH.cyl(o.r3 * .75, o.r3 * 1.0, .16, knee, s * o.r3 * .7, fy - .06, .02, MH.mat(0x1a1612)));
+        }
+        else {
+            MH.sph(o.r3 * 1.15, knee, 0, fy + .02, 0, o.mat);
+            MH.cyl(o.r3 * 1.05, o.r3 * 1.45, .2, knee, 0, fy - .09, .02, MH.mat(o.hoof || 0x1c1814));
+        }
+        hip.rotation.x = o.hip || 0;
+        knee.rotation.x = o.knee || 0;
+        hip.userData = { hip0: o.hip || 0, knee0: o.knee || 0, kn: knee };
+        return hip;
+    },
+    // jointed chain (neck / tail); each seg has its own rotation; returns {segs, end}
+    chain(parent, x, y, z, n, len, r0, r1, angs, mat, taperEnd) {
+        const segs = [];
+        let p = parent;
+        for (let i = 0; i < n; i++) {
+            const gr = new THREE.Group(), ra = r0 + (r1 - r0) * i / n, rb = r0 + (r1 - r0) * (i + 1) / n;
+            if (i == 0)
+                gr.position.set(x, y, z);
+            else
+                gr.position.y = len;
+            gr.rotation.x = angs[i];
+            p.add(gr);
+            MH.cyl(rb, ra, len, gr, 0, len / 2, 0, mat, 9);
+            MH.sph(rb * 1.02, gr, 0, len, 0, mat);
+            gr.userData = { a0: angs[i] };
+            segs.push(gr);
+            p = gr;
+        }
+        const end = new THREE.Group();
+        end.position.y = len;
+        p.add(end);
+        return { segs, end };
+    }
+};
+const MS2 = {
+    'Brown Horse': { fam: 'horse', t: 'fur', mane: 0x20120a, blaze: 1, ride: 1.62 },
+    'Golden Charger': { fam: 'horse', t: 'armor', mane: 0xfff2b0, armor: 1, ride: 1.62 },
+    'Hellsteed': { fam: 'horse', t: 'lava', mane: 0xff5a1a, flame: 1, horns: 1, eye: 0xffee33, ride: 1.62 },
+    'Arcane Unicorn': { fam: 'horse', t: 'sparkle', mane: 0xff7aff, horn: 1, wing: 1, ride: 1.62 }
+};
+function mhHorse(g, root, d, s, mats, refs) {
+    const coat = mats.coat, mane = mats.mane, M = MH;
+    // --- body ---
+    M.sph(1, root, 0, 1.78, 0, coat, .62, .6, 1.3);
+    M.sph(.6, root, 0, 1.72, .8, coat, 1, 1.02, .95);
+    M.sph(.64, root, 0, 1.8, -.74, coat, .96, 1, 1);
+    M.sph(.36, root, 0, 2.28, .55, coat, 1, .55, 1.3);
+    M.sph(.5, root, 0, 1.4, .1, coat, 1.05, .6, 1.4);
+    // --- legs ---
+    const legs = [];
+    const lg = (x, z, hind) => {
+        const u = .64, l = .62, a = hind ? -.42 : .05, k = hind ? 1.0 : -.02, th2 = a + k;
+        const y = u * Math.cos(a) + l * Math.cos(th2) + .19 * Math.cos(th2) + (hind ? 0 : 0);
+        return M.leg(root, x, y, z, { u, l, r1: hind ? .23 : .2, r2: .14, r3: .1, mat: coat, hip: a, knee: k, hoof: s.flame ? 0x331008 : 0x1c1814 });
+    };
+    legs.push(lg(-.34, .8, false), lg(.34, .8, false), lg(-.36, -.78, true), lg(.36, -.78, true));
+    refs.legs = legs;
+    // --- neck + head ---
+    const nk = M.chain(root, 0, 2.0, .9, 3, .5, .38, .23, [.7, .2, .12], coat);
+    refs.neck = nk.segs;
+    nk.segs.forEach((sg, i) => {
+        const r = .3 - i * .03;
+        M.box(.07, .48, .14, sg, 0, .26, -(r + .02), mane);
+        if (!s.flame)
+            M.cone(.06, .22, sg, 0, .1, -(r + .1), mane, -2.6);
+    });
+    const hdr = new THREE.Group(), hd = new THREE.Group();
+    hdr.rotation.x = 1.35;
+    nk.end.add(hdr);
+    hd.scale.setScalar(1.25);
+    hdr.add(hd);
+    refs.head = hdr;
+    refs.head0 = 1.35;
+    M.sph(.22, hd, 0, .04, 0, coat, .95, 1.15, 1);
+    M.sph(.17, hd, 0, .08, .08, coat);
+    M.cyl(.115, .15, .54, hd, 0, .38, .03, coat);
+    M.sph(.125, hd, 0, .67, .04, coat, 1, .9, .95);
+    M.cyl(.1, .13, .4, hd, 0, .3, .15, coat);
+    [-1, 1].forEach(sd => {
+        M.sph(.03, hd, sd * .06, .74, .09, M.mat(0x120a08));
+        M.sph(.05, hd, sd * .19, .1, -.06, mats.eye);
+        M.sph(.024, hd, sd * .22, .11, -.075, M.bas(0xffffff));
+        M.cone(.07, .22, hd, sd * .1, -.1, -.19, coat, -1.25, -sd * .15);
+    });
+    M.cone(.09, .22, hd, 0, -.03, -.2, mane, -1.6);
+    if (s.blaze)
+        M.box(.07, .5, .02, hd, 0, .3, -.125, M.mat(0xf4f0e8));
+    const lea = M.mat(0x3a2418), tor = new THREE.Mesh(new THREE.TorusGeometry(.145, .018, 6, 14), lea);
+    tor.rotation.x = Math.PI / 2;
+    tor.position.set(0, .46, .03);
+    hd.add(tor);
+    M.box(.02, .5, .02, hd, .19, .12, -.0, lea).rotation.z = .0;
+    M.box(.02, .5, .02, hd, -.19, .12, -.0, lea);
+    if (s.horn) {
+        const hn = M.cone(.06, .62, hd, 0, .12, -.36, M.mat(0xfff0ff, { emissive: 0x6a4a7a }), -.95);
+        for (let k = 0; k < 4; k++)
+            M.mesh(new THREE.TorusGeometry(.055 - k * .008, .012, 5, 10), hd, 0, .1 + k * .1, -.3 - k * .09, M.mat(0xd8b8ff, { emissive: 0x4a2a6a })).rotation.x = Math.PI / 2 - .95;
+    }
+    if (s.horns)
+        [-1, 1].forEach(sd => M.cone(.06, .42, hd, sd * .16, -.08, -.26, M.mat(0x2a1a14), -.9, -sd * .45));
+    if (s.armor) {
+        const gold = M.mat(0xe8b84a, { emissive: 0x3a2a08 }), steel = M.mat(0xc8d0dc, { emissive: 0x141820 });
+        M.mesh(new THREE.BoxGeometry(.3, .62, .05), hd, 0, .34, -.13, gold);
+        M.sph(.1, hd, 0, .42, -.15, steel);
+        M.sph(.5, root, 0, 1.72, .98, steel, 1, 1, .7).material.emissive = new THREE.Color(0x141820);
+        nk.segs.forEach((sg, i) => M.box(.5 - i * .05, .12, .4 - i * .03, sg, 0, .26, 0, i % 2 ? steel : gold));
+        const cap = M.mat(0xf2ece0, { emissive: 0x2a2418 });
+        M.box(.98, .05, 1.2, root, 0, 2.4, -.1, cap);
+        [-1, 1].forEach(sd => { const dr = M.box(.05, .85, 1.3, root, sd * .66, 2.0, -.1, cap); dr.rotation.z = sd * .22; M.box(.06, .08, 1.3, root, sd * .74, 1.6, -.1, M.mat(0xe8b84a, { emissive: 0x3a2a08 })).rotation.z = sd * .22; });
+    }
+    // --- tail ---
+    const tl = M.chain(root, 0, 2.05, -1.2, 4, .4, .1, .06, [-2.55, .3, .3, .3], mane);
+    refs.tail = tl.segs;
+    M.cone(.12, .55, tl.end, 0, .0, 0, mane, Math.PI);
+    // --- saddle ---
+    const lea2 = M.mat(0x5a2a1a), blanket = M.mat(s.armor ? 0xf6f2ea : 0x7a1a1a);
+    M.box(.98, .05, 1.15, root, 0, 2.4, -.05, blanket);
+    M.box(.5, .1, .66, root, 0, 2.47, -.05, lea2);
+    M.box(.32, .17, .1, root, 0, 2.54, .3, lea2);
+    M.box(.34, .22, .1, root, 0, 2.56, -.38, lea2);
+    [-1, 1].forEach(sd => {
+        M.box(.03, .75, .06, root, sd * .56, 2.05, -.05, lea2);
+        const st = new THREE.Mesh(new THREE.TorusGeometry(.1, .018, 6, 12), M.mat(0xc8c8d0));
+        st.position.set(sd * .56, 1.66, -.05);
+        st.rotation.y = Math.PI / 2;
+        root.add(st);
+    });
+    if (s.flame) {
+        refs.flames = [];
+        nk.segs.forEach((sg, i) => { const f = M.cone(.09, .45, sg, 0, .25, -.3, M.bas(i % 2 ? 0xff7a1a : 0xffc22a), -2.2); refs.flames.push(f); });
+        tl.segs.forEach(sg => refs.flames.push(M.cone(.1, .4, sg, 0, .2, 0, M.bas(0xff6a1a))));
+        legs.forEach(l => { const f = M.cone(.1, .3, l.userData.kn, 0, -.62, 0, M.bas(0xff8a2a)); refs.flames.push(f); });
+    }
+}
+// ---------- quadrupeds: wolf, panther, bear, boar, gryphon, drake ----------
+Object.assign(MS2, {
+    'Gryphon': { fam: 'quad', t: 'fur', head: 'eagle', fea: 0xf2ead8, L: 1.0, rx: .5, ry: .5, u: .5, l: .46, r1: .17, r2: .11, r3: .08, foot: 'talon', hfoot: 'paw', hindA: -.3, hindK: .7, neck: { n: 3, len: .38, r0: .36, r1: .24, angs: [.75, .12, .02] }, hd: 1.0, tail: { n: 4, len: .4, r0: .12, r1: .07, angs: [-2.2, .3, .3, .3] }, fly: 1, wing: { type: 'feather', len: 2.5, n: 12, fw: .26, armC: 0xc8a050, c1: 0xf4ecd8, c2: 0xc8a050 }, eye: 0xffcc22 },
+    'Ember Drake': { fam: 'quad', t: 'scale', head: 'dragon', L: 1.3, rx: .58, ry: .55, u: .5, l: .46, r1: .2, r2: .13, r3: .09, foot: 'talon', hindA: -.3, hindK: .75, neck: { n: 5, len: .42, r0: .38, r1: .2, angs: [.55, .25, .15, .1, .05] }, hd: 1.1, tail: { n: 7, len: .5, r0: .3, r1: .05, angs: [-2.4, .25, .25, .2, .2, .2, .2], spikes: 1 }, fly: 1, wing: { type: 'bat', len: 3.0, bone: 0x2a4a28, mem: 0x2a8a3a, em: 0x0a2a10 }, eye: 0xff6a1a },
+    'Dire Wolf': { fam: 'quad', t: 'fur', head: 'wolf', L: .9, rx: .54, ry: .52, u: .44, l: .42, r1: .2, r2: .13, r3: .095, foot: 'paw', hindA: -.35, hindK: .85, neck: { n: 2, len: .42, r0: .4, r1: .28, angs: [.85, .3] }, hd: 1.0, tail: { n: 3, len: .4, r0: .14, r1: .08, angs: [-2.2, .35, .35] }, ruff: 1, spine: 1, eye: 0xffcc22 },
+    'Shadow Panther': { fam: 'quad', t: 'spot', head: 'cat', L: 1.15, rx: .42, ry: .42, u: .5, l: .5, r1: .14, r2: .09, r3: .07, foot: 'paw', hindA: -.3, hindK: .75, neck: { n: 2, len: .4, r0: .32, r1: .24, angs: [.8, .35] }, hd: 1.0, tail: { n: 5, len: .4, r0: .09, r1: .05, angs: [-2.0, .35, .3, .3, .3] }, eye: 0x66ff88 },
+    'Great Bear': { fam: 'quad', t: 'fur', head: 'bear', L: .85, rx: .62, ry: .6, u: .56, l: .5, r1: .3, r2: .22, r3: .14, foot: 'paw', hindA: -.2, hindK: .5, neck: { n: 2, len: .4, r0: .5, r1: .42, angs: [.7, .35] }, hd: 1.15, tail: { n: 1, len: .25, r0: .14, r1: .1, angs: [-2.4] }, hump: 1 },
+    'Iron Boar': { fam: 'quad', t: 'fur', head: 'boar', L: .8, rx: .55, ry: .55, u: .52, l: .46, r1: .23, r2: .16, r3: .1, foot: 'cloven', hindA: -.15, hindK: .4, neck: { n: 2, len: .34, r0: .5, r1: .4, angs: [.55, .3] }, hd: 1.2, tail: { n: 2, len: .22, r0: .06, r1: .04, angs: [-2.0, .9] }, bristles: 1, armor: 1, eye: 0xff4a2a }
+});
+function mhQuad(g, root, d, s, mats, refs) {
+    const M = MH, coat = mats.coat, mane = mats.mane;
+    const a = s.hindA, k = s.hindK, th2 = a + k, hipH = s.u * Math.cos(a) + s.l * Math.cos(th2) + .1 * Math.cos(th2) + .05, hipF = s.u * Math.cos(.05) + s.l * Math.cos(.03) + .15;
+    const by = Math.max(hipH, hipF) + s.ry * .45;
+    refs.by = by;
+    // body
+    M.sph(1, root, 0, by, 0, coat, s.rx, s.ry, s.L * 1.25);
+    M.sph(s.rx * 1.02, root, 0, by + s.ry * .05, s.L * .72, mats.fea || coat, 1, 1.03, .9);
+    M.sph(s.rx * 1.0, root, 0, by + s.ry * .04, -s.L * .72, coat, 1, 1.02, .95);
+    if (s.hump)
+        M.sph(.5, root, 0, by + s.ry * .75, s.L * .45, coat, 1.1, .8, 1.2);
+    // legs
+    const legs = [];
+    const lg = (x, z, hind) => M.leg(root, x, hind ? hipH : hipF, z, { u: s.u, l: s.l, r1: hind ? s.r1 * 1.15 : s.r1, r2: s.r2, r3: s.r3, mat: coat, foot: hind ? (s.hfoot || s.foot) : s.foot, hip: hind ? a : .05, knee: hind ? k : -.03 });
+    legs.push(lg(-s.rx * .62, s.L * .62, false), lg(s.rx * .62, s.L * .62, false), lg(-s.rx * .66, -s.L * .62, true), lg(s.rx * .66, -s.L * .62, true));
+    refs.legs = legs;
+    // neck + head
+    const nc = s.neck, nk = M.chain(root, 0, by + s.ry * .45, s.L * .75, nc.n, nc.len, nc.r0, nc.r1, nc.angs, mats.fea || coat);
+    refs.neck = nk.segs;
+    if (s.ruff)
+        nk.segs.forEach((sg, i) => { for (let q = -1; q <= 1; q += 1)
+            M.cone(.2, .5, sg, q * .3, .22, -.05, coat, -.5, q * -.6); });
+        for (let q = -1; q <= 1; q += 2)
+            M.cone(.18, .45, root, q * .4, by + s.ry * .4, s.L * .8, coat, -.2, -q * .9);
+    const sum = nc.angs.reduce((x, y) => x + y, 0), cum = s.head == 'eagle' ? 1.6 : s.head == 'dragon' ? 1.75 : 2.0;
+    const hdr = new THREE.Group(), hd = new THREE.Group();
+    hdr.rotation.x = cum - sum;
+    nk.end.add(hdr);
+    hd.scale.setScalar(s.hd || 1);
+    hdr.add(hd);
+    refs.head = hdr;
+    refs.head0 = cum - sum;
+    const eye = mats.eye, dk = M.mat(0x120a08), white = M.mat(0xf2ede0);
+    const eyes = (x, y, z, r) => [-1, 1].forEach(sd => { M.sph(r || .045, hd, sd * x, y, z, eye); M.sph((r || .045) * .5, hd, sd * (x + .02), y + .01, z - .01, M.bas(0x050505)); });
+    if (s.head == 'wolf') {
+        M.sph(.27, hd, 0, .05, 0, coat, 1, 1.1, 1);
+        M.cyl(.09, .17, .5, hd, 0, .4, .03, coat, 8);
+        M.sph(.085, hd, 0, .68, .02, dk);
+        M.cyl(.07, .12, .4, hd, 0, .34, .15, coat, 8);
+        eyes(.2, .14, -.06);
+        [-1, 1].forEach(sd => { M.cone(.12, .34, hd, sd * .15, -.1, -.24, coat, -.3 - 1.0, sd * -.25); M.cone(.025, .1, hd, sd * .08, .52, .12, white, Math.PI); M.cone(.06, .25, hd, sd * .28, .0, .02, coat, 0, sd * -1.1); });
+        M.box(.1, .06, .26, hd, 0, .5, .13, M.mat(0xc04a4a));
+    }
+    else if (s.head == 'cat') {
+        M.sph(.26, hd, 0, .05, 0, coat, 1, 1.05, .95);
+        M.cyl(.1, .15, .28, hd, 0, .3, .05, coat, 8);
+        M.sph(.07, hd, 0, .46, .04, M.mat(0x2a1a22));
+        eyes(.17, .14, -.08, .05);
+        [-1, 1].forEach(sd => { M.sph(.09, hd, sd * .17, -.08, -.2, coat, 1, .8, .6); M.cone(.025, .12, hd, sd * .06, .38, .12, white, Math.PI); });
+        M.cyl(.06, .1, .22, hd, 0, .26, .15, coat, 8);
+    }
+    else if (s.head == 'bear') {
+        M.sph(.34, hd, 0, .05, 0, coat, 1.05, 1, 1);
+        M.cyl(.15, .22, .32, hd, 0, .38, .06, coat, 9);
+        M.sph(.1, hd, 0, .56, .04, dk);
+        eyes(.22, .16, -.1, .04);
+        [-1, 1].forEach(sd => M.sph(.11, hd, sd * .24, -.1, -.26, coat, 1, 1, .7));
+        M.cyl(.1, .17, .22, hd, 0, .3, .18, coat, 8);
+    }
+    else if (s.head == 'boar') {
+        M.sph(.3, hd, 0, .05, 0, coat, 1.05, 1.1, 1);
+        M.cyl(.17, .22, .52, hd, 0, .4, .04, coat, 9);
+        M.cyl(.15, .15, .08, hd, 0, .68, .04, M.mat(0x7a5a5a), 9);
+        M.cyl(.1, .17, .42, hd, 0, .32, .17, coat, 8);
+        eyes(.23, .17, -.1, .04);
+        [-1, 1].forEach(sd => { M.cone(.06, .5, hd, sd * .2, .5, .16, white, -.5, sd * .55); M.cone(.1, .24, hd, sd * .2, -.12, -.2, coat, -.9, sd * -.3); });
+    }
+    else if (s.head == 'eagle') {
+        const fea = mats.fea, bk = M.mat(0xf0b020, { emissive: 0x4a3008 });
+        M.sph(.23, hd, 0, .04, 0, fea, 1, 1.1, 1);
+        M.cone(.14, .46, hd, 0, .38, .03, bk, .32);
+        M.cone(.09, .3, hd, 0, .3, .1, bk, -.05);
+        M.box(.36, .05, .12, hd, 0, .14, -.15, fea);
+        eyes(.18, .12, -.09, .06);
+        for (let q = -1; q <= 1; q++)
+            M.cone(.07, .36, hd, q * .1, -.15, -.12, fea, -2.0, q * .3);
+        [-1, 1].forEach(sd => M.sph(.13, hd, sd * .17, 0, .03, fea));
+    }
+    else if (s.head == 'dragon') {
+        const hornM = M.mat(0x2a2218), tooth = white;
+        M.sph(.27, hd, 0, .02, 0, coat, 1, 1.05, 1);
+        M.cyl(.14, .25, .76, hd, 0, .4, .02, coat, 8);
+        M.cyl(.1, .2, .58, hd, 0, .34, .16, coat, 8);
+        for (let q = 0; q < 5; q++)
+            [-1, 1].forEach(sd => M.cone(.025, .11, hd, sd * (.1 + q * .006), .2 + q * .12, .1, tooth, Math.PI));
+        [-1, 1].forEach(sd => {
+            M.cone(.075, .56, hd, sd * .17, -.1, -.2, hornM, -2.1, sd * .35);
+            M.cone(.05, .24, hd, sd * .3, 0, .04, coat, 0, sd * -1.2);
+            M.sph(.05, hd, sd * .06, .74, .05, dk);
+            M.box(.14, .05, .12, hd, sd * .18, .12, -.14, coat);
+        });
+        eyes(.2, .12, -.1, .055);
+    }
+    // tail
+    const tl = M.chain(root, 0, by + s.ry * .35, -s.L * 1.1, s.tail.n, s.tail.len, s.tail.r0, s.tail.r1, s.tail.angs, coat);
+    refs.tail = tl.segs;
+    if (s.head == 'wolf')
+        M.sph(.17, tl.end, 0, .05, 0, coat, 1, 1.4, 1);
+    if (s.head == 'eagle')
+        M.sph(.2, tl.end, 0, .08, 0, mane, .9, 1.6, .9);
+    if (s.tail.spikes)
+        tl.segs.forEach((sg, i) => M.cone(.09 - i * .008, .3 - i * .02, sg, 0, s.tail.len * .5, -(.2 - i * .02), mane, -.4));
+    if (s.head == 'dragon')
+        M.cone(.14, .5, tl.end, 0, .2, 0, mane, 0);
+    if (s.spine)
+        for (let q = 0; q < 7; q++)
+            M.cone(.07, .28, root, 0, by + s.ry * .9, s.L * 0.9 - q * s.L * .3, mane, -.3);
+    if (s.head == 'dragon')
+        for (let q = 0; q < 8; q++)
+            M.cone(.1 - q * .005, .38, root, 0, by + s.ry * .95, s.L * 1.1 - q * s.L * .3, mane, -.25);
+    if (s.head == 'dragon')
+        M.box(.62, .06, 2.2, root, 0, by - s.ry * .9, 0.2, M.mat(0xe8d08a));
+    if (s.bristles)
+        for (let q = 0; q < 9; q++)
+            M.cone(.07, .3, root, 0, by + s.ry * .95, s.L * 1.0 - q * s.L * .24, M.mat(0x2a1a14), -.4);
+    if (s.armor) {
+        const st = M.mat(0x9aa4b4, { emissive: 0x141820 });
+        M.sph(.62, root, 0, by + s.ry * .35, s.L * .5, st, 1, .55, 1.1);
+        M.sph(.62, root, 0, by + s.ry * .3, -s.L * .3, st, 1, .5, 1.2);
+        [-1, 1].forEach(sd => M.cone(.09, .35, root, sd * s.rx * .8, by + s.ry * .75, s.L * .45, st, 0, -sd * .6));
+        M.box(.4, .3, .08, hd, 0, .3, -.28, st);
+    }
+    // saddle
+    const lea = M.mat(0x4a2a1a), top = by + s.ry * 1.0 + (s.hump ? .15 : 0);
+    M.box(.8, .06, .95, root, 0, top, -.05, M.mat(0x6a1a1a));
+    M.box(.46, .1, .62, root, 0, top + .07, -.05, lea);
+    M.box(.3, .15, .1, root, 0, top + .14, .3, lea);
+    M.box(.32, .2, .1, root, 0, top + .16, -.38, lea);
+    refs.saddleTop = top + .12;
+}
+
+CM.warrior.col = 0x6a4a38;
+// ---------- wings ----------
+MH.tris = function (parent, pts, idx, mat) {
+    const g = new THREE.BufferGeometry(), arr = new Float32Array(pts.length * 3);
+    pts.forEach((p, i) => { arr[i * 3] = p[0]; arr[i * 3 + 1] = p[1]; arr[i * 3 + 2] = p[2]; });
+    g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat);
+    parent.add(m);
+    return m;
+};
+MH.featherWing = function (parent, side, o) {
+    const piv = new THREE.Group(), M = MH, len = o.len;
+    piv.position.set(side * o.x, o.y, o.z);
+    parent.add(piv);
+    const arm = M.mat(o.armC), f1 = M.mat(o.c1, o.em ? { emissive: o.em } : {}), f2 = M.mat(o.c2, o.em ? { emissive: o.em } : {});
+    const E = { x: side * len * .4, y: len * .14, z: -.05 }, T = { x: side * len, y: len * .06, z: -len * .08 };
+    M.rod(piv, { x: 0, y: 0, z: 0 }, E, .12, .09, arm);
+    M.rod(piv, E, T, .09, .04, arm);
+    const n = o.n || 11;
+    for (let i = 0; i < n; i++) {
+        const t = i / (n - 1), pos = t < .4 ? { x: E.x * (t / .4), y: E.y * (t / .4), z: -.05 * (t / .4) } : { x: E.x + (T.x - E.x) * ((t - .4) / .6), y: E.y + (T.y - E.y) * ((t - .4) / .6), z: -.05 + (T.z + .05) * ((t - .4) / .6) };
+        const L = len * (t > .78 ? .78 - (t - .78) * .6 : .34 + .5 * t), sw = side * (.06 + .62 * t);
+        for (let layer = 0; layer < 2; layer++) {
+            const ll = layer ? L * .55 : L, f = new THREE.Mesh(new THREE.BoxGeometry(o.fw, .03, ll), layer ? f2 : f1);
+            f.position.z = -ll / 2;
+            const gp = new THREE.Group();
+            gp.position.set(pos.x, pos.y - layer * .03 + .02, pos.z - .05);
+            gp.rotation.y = sw * (layer ? .8 : 1);
+            gp.add(f);
+            piv.add(gp);
+        }
+    }
+    return piv;
+};
+MH.batWing = function (parent, side, o) {
+    const piv = new THREE.Group(), M = MH, L = o.len;
+    piv.position.set(side * o.x, o.y, o.z);
+    parent.add(piv);
+    const bone = M.mat(o.bone), mem = M.mat(o.mem, { side: 2, emissive: o.em || 0 });
+    const P = (x, y, z) => ({ x: side * x * L, y: y * L, z: z * L });
+    const S0 = P(0, 0, 0), E = P(.36, .3, -.08), W = P(.74, .26, -.2), F = [P(1.04, .1, -.32), P(.92, .02, -.72), P(.64, -.04, -.98), P(.3, -.06, -.86)], B = P(.02, -.1, -.6);
+    M.rod(piv, S0, E, .13, .1, bone);
+    M.rod(piv, E, W, .1, .07, bone);
+    F.forEach(f => M.rod(piv, W, f, .06, .022, bone));
+    M.cone(.06, .3, piv, W.x, W.y + .1, W.z, bone, 0, 0);
+    const v = [S0, W, F[0], F[1], F[2], F[3], B].map(p => [p.x, p.y, p.z]);
+    const ix = side > 0 ? [[0, 1, 6], [1, 5, 6], [1, 4, 5], [1, 3, 4], [1, 2, 3]] : [[0, 6, 1], [1, 6, 5], [1, 5, 4], [1, 4, 3], [1, 3, 2]];
+    MH.tris(piv, v, ix.flat(), mem);
+    return piv;
+};
+// ---------- wings attach + swan + dispatch ----------
+Object.assign(MS2, { 'Radiant Swan': { fam: 'swan', t: 'feather', fly: 1, wing: { type: 'feather', len: 2.6, n: 12, fw: .28, armC: 0xe8e8f0, c1: 0xffffff, c2: 0xe4e4f4, em: 0x3a3a50 } } });
+Object.assign(MS2['Arcane Unicorn'], { fly: 1, wing: { type: 'feather', len: 1.9, n: 11, fw: .2, armC: 0xe8d8ff, c1: 0xf6eaff, c2: 0xc8a0ff, em: 0x4a2a7a } });
+function mhSwan(g, root, d, s, mats, refs) {
+    const M = MH, wh = mats.coat, by = 1.5, org = M.mat(0xf08a1a, { emissive: 0x3a1a04 });
+    M.sph(1, root, 0, by, 0, wh, .55, .5, 1.25);
+    M.sph(.5, root, 0, by + .12, .85, wh, 1, 1, 1);
+    M.sph(.42, root, 0, by + .05, -.8, wh, 1.1, .9, 1);
+    for (let i = -2; i <= 2; i++) {
+        const f = M.box(.2, .03, 1.0, root, 0, by + .22, -1.45, wh);
+        f.position.set(Math.sin(i * .2) * 1.0 * .5, by + .24, -1.15 - Math.cos(i * .2) * .5);
+        f.rotation.y = i * .2;
+    }
+    const nk = M.chain(root, 0, by + .35, .95, 6, .34, .2, .1, [.9, -.35, -.45, -.4, .25, .1], wh);
+    refs.neck = nk.segs;
+    const hdr = new THREE.Group(), hd = new THREE.Group();
+    hdr.rotation.x = 1.5;
+    nk.end.add(hdr);
+    hd.scale.setScalar(1.0);
+    hdr.add(hd);
+    refs.head = hdr;
+    refs.head0 = 1.5;
+    M.sph(.14, hd, 0, .04, 0, wh, 1, 1.15, 1);
+    M.cone(.075, .34, hd, 0, .27, .03, org, .12);
+    M.sph(.055, hd, 0, .14, .0, M.mat(0x181010));
+    [-1, 1].forEach(sd => { M.sph(.075, hd, sd * .1, .12, -.04, M.mat(0x181010), 1, 1, .8); M.sph(.03, hd, sd * .12, .13, -.06, M.bas(0xffffff)); });
+    const legs = [];
+    [-1, 1].forEach(sd => legs.push(M.leg(root, sd * .26, by - .3, .1, { u: .32, l: .32, r1: .07, r2: .05, r3: .04, mat: org, foot: 'talon', cmat: org, hip: -.8, knee: 1.5 })));
+    refs.legs = legs;
+    const tl = M.chain(root, 0, by + .2, -1.2, 2, .3, .05, .03, [-2.0, .2], wh);
+    refs.tail = tl.segs;
+    const top = by + .52;
+    M.box(.8, .05, 1.0, root, 0, top, .0, M.mat(0xf2f0ff));
+    M.box(.44, .1, .56, root, 0, top + .07, 0, M.mat(0x5a2a1a));
+    M.box(.3, .16, .1, root, 0, top + .14, .26, M.mat(0x5a2a1a));
+    M.box(.3, .2, .1, root, 0, top + .16, -.3, M.mat(0x5a2a1a));
+    refs.saddleTop = top + .12;
+    refs.by = by;
+}
+function mhWings(g, root, s, refs) {
+    if (!s.wing)
+        return;
+    const w = s.wing, sh = s.fam == 'horse' ? { x: .4, y: 2.35, z: .35 } : s.fam == 'swan' ? { x: .4, y: refs.by + .3, z: .15 } : { x: .35, y: (refs.by || 1.8) + (s.ry || .5) * .8, z: (s.L || 1) * .3 };
+    refs.wings = [-1, 1].map(sd => { const o = Object.assign({}, w, { x: sh.x, y: sh.y, z: sh.z }); return { piv: w.type == 'bat' ? MH.batWing(root, sd, o) : MH.featherWing(root, sd, o), sd, rise: w.type == 'bat' ? .15 : .1 }; });
+}
+function mountMesh2(d) {
+    const s = MS2[d.n] || MS2['Brown Horse'], g = new THREE.Group(), root = new THREE.Group(), refs = { t: 0 };
+    g.add(root);
+    const coat = new THREE.MeshLambertMaterial({ map: mtex(s.t, d.col), emissive: d.cls ? d.col : 0, emissiveIntensity: .2 });
+    const mats = { coat, mane: MH.mat(s.mane != null ? s.mane : d.col, s.flame ? { emissive: 0x551a05 } : {}), eye: MH.mat(s.eye || 0x1a1008, s.eye ? { emissive: s.eye } : {}) };
+    if (s.fea)
+        mats.fea = new THREE.MeshLambertMaterial({ map: mtex('feather', s.fea) });
+    if (s.fam == 'horse')
+        mhHorse(g, root, d, s, mats, refs);
+    else if (s.fam == 'swan')
+        mhSwan(g, root, d, s, mats, refs);
+    else
+        mhQuad(g, root, d, s, mats, refs);
+    mhWings(g, root, s, refs);
+    g.root = root;
+    g.legs = refs.legs;
+    g.tl = refs.tail[0];
+    g.ride = s.ride || (refs.saddleTop - .9);
+    g.refs = refs;
+    refs.fly = !!s.fly;
+    g.anim = function (t, mv, jump) { mhAnim(g, refs, t, mv, jump); };
+    return g;
+}
+function mhAnim(g, r, t, mv, jump) {
+    const ph = t * 11, A = mv ? 1 : 0;
+    r.legs.forEach((h, i) => {
+        const front = i < 2, p = ph + (i == 0 || i == 3 ? 0 : Math.PI), u = h.userData;
+        if (r.fly) {
+            h.rotation.x = u.hip0 + Math.sin(t * 2 + i) * .05;
+            u.kn.rotation.x = u.knee0;
+        }
+        else if (jump) {
+            h.rotation.x = u.hip0 + (front ? -.9 : .7);
+            u.kn.rotation.x = u.knee0 + (front ? .9 : -.2);
+        }
+        else {
+            h.rotation.x = u.hip0 + Math.sin(p) * (front ? .55 : .5) * A;
+            u.kn.rotation.x = u.knee0 + Math.max(0, Math.sin(p + 1.4)) * (front ? -.8 : .9) * A;
+        }
+    });
+    g.root.position.y = r.fly ? Math.sin(t * (mv ? 5 : 3)) * (mv ? .12 : .08) : jump ? .1 : mv ? Math.abs(Math.sin(ph)) * .07 : Math.sin(t * 1.6) * .012;
+    g.root.rotation.x = mv && !r.fly ? Math.sin(ph * 2) * .015 : r.fly && mv ? -.06 : 0;
+    r.neck.forEach((sg, i) => { sg.rotation.x = sg.userData.a0 + Math.sin((r.fly ? t * 5 : ph * 2) + i * .6) * (mv ? .035 : .012); sg.rotation.z = Math.sin(t * .9 + i) * .02; });
+    r.head.rotation.x = r.head0 + (mv ? Math.sin(ph * 2) * .05 : Math.sin(t * .8) * .03);
+    r.tail.forEach((sg, i) => { sg.rotation.z = Math.sin(t * (mv ? 9 : 2.2) - i * .7) * (mv ? .2 : .12); if (i)
+        sg.rotation.x = sg.userData.a0 + (mv ? -.2 : 0); });
+    if (r.wings)
+        r.wings.forEach(w => { const sp = mv ? 8 : 5, am = mv ? .6 : .38; w.piv.rotation.z = w.sd * (w.rise + Math.sin(t * sp) * am); w.piv.rotation.x = Math.sin(t * sp + 1) * .08; });
+    if (r.flames)
+        r.flames.forEach((f, i) => { f.scale.set(1, 1 + Math.sin(t * 16 + i * 1.3) * .3, 1); });
+}
+
+function mountMesh(d) { return mountMesh2(d); }
 function MOUNTANIM(dt, t) {
     pvpTick(dt, t);
     wbTick(dt, t);
@@ -3693,11 +4331,9 @@ function MOUNTANIM(dt, t) {
         burst(new THREE.Vector3(P.pos.x, 0, P.pos.z), 0xc8b890, 7, .3, .1);
     P.pos.y = P.by + P.jy + groundH(P.pos.x, P.pos.z);
     if (P.mm) {
-        if (P.mm.tl)
-            P.mm.tl.rotation.y = Math.sin(t * (P.mv ? 10 : 3)) * .35;
-        P.mm.legs.forEach((l, i) => l.rotation.x = P.jy > .05 ? (i < 2 ? -.9 : .7) : P.mv ? Math.sin(t * 14 + (i % 2) * 3.14) * .7 : 0);
-        if (P.mm.wings)
-            P.mm.wings.forEach((w, i) => w.rotation.z = (i ? -1 : 1) * (Math.sin(t * (P.mv ? 9 : 5)) * .5 + .15));
+        P.mm.anim(t, P.mv, P.jy > .05);
+        P.mesh.legs[0].rotation.set(-.35, 0, -.5);
+        P.mesh.legs[1].rotation.set(-.35, 0, .5);
     }
 }
 function startCast(i) { if (DG.on)
@@ -3712,7 +4348,7 @@ function mountToggle() { if (P.mount)
     i = 0; startCast(i); }
 function doMount(i) { const d = ML()[i]; P.mount = d; P.mm = mountMesh(d); P.mm.position.y = -P.mm.ride; P.mesh.add(P.mm); P.sel = i; burst(P.pos, 0xffffff, 16, 1); say('Mounted: ' + d.n + ' (H to dismount, abilities disabled)'); }
 function dismount() { if (!P || !P.mount)
-    return; P.mesh.remove(P.mm); P.mm = null; P.mount = null; say('Dismounted.'); }
+    return; P.mesh.legs.forEach(l => l.rotation.set(0, 0, 0)); P.mesh.remove(P.mm); P.mm = null; P.mount = null; say('Dismounted.'); }
 function toggleBook() { const b = $('mb'); b.style.display = b.style.display == 'flex' ? 'none' : 'flex'; renderBook(); }
 function renderBookOld() { $('mb').innerHTML = '<b style="color:var(--gold)">Mounts</b> <small>click to summon · H mount/dismount · B close</small>' + MOUNTS.map((d, i) => { const ok = P.lvl >= d.lvl; return `<div onclick="pickMount(${i})" style="margin-top:6px;padding:6px;border:1px solid ${P.sel === i ? '#e8b84a' : '#555'};border-radius:5px;opacity:${ok ? 1 : .45};cursor:${ok ? 'pointer' : 'default'}">${d.e} <b>${d.n}</b> — speed ×${d.sp}${d.fly ? ' · flying (mobs ignore you)' : ''}<br><small>${ok ? 'Unlocked' : 'Unlocks at level ' + d.lvl}</small></div>`; }).join(''); }
 function renderBook() { const L = ML(); $('mb').innerHTML = `<div class="mp" style="min-width:min(560px,92vw);text-align:center"><b style="color:var(--gold)">🐴 Mounts</b><span onclick="toggleBook()" style="float:right;cursor:pointer">✕</span><div style="margin:8px 0 12px;font-size:12px;opacity:.8">Click a mount to summon it · H mount/dismount · P or Esc to close</div><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">${L.map((d, i) => `<div class="sl" onclick="pickMount(${i})" style="cursor:pointer;width:100px;height:122px;background:radial-gradient(circle at 50% 35%,#${d.col.toString(16).padStart(6, '0')},#050505 85%);border-color:${P.sel === i ? '#fff' : d.cls ? '#e8b84a' : '#7a5a22'}"><i class="ic" style="font-size:46px;top:10px">${d.e}</i><span style="font-size:11px;bottom:38px">${d.n}</span><em style="bottom:22px;color:#fff">×${d.sp} speed</em><em style="color:#8cf">${d.fly ? 'Flying' : 'Ground'}${d.cls ? ' · ⭐ Class' : ''}</em></div>`).join('')}</div></div>`; }
@@ -3915,7 +4551,7 @@ function start(c, spec) {
         P.spec = spec || (CUR && CUR.sp) || SPECS[c][1][0];
     P.cfg = cfgOf(P);
     P.max = P.hp = maxHP(1);
-    P.mesh = hero(k.col, c);
+    P.mesh = hero(k.col, c, CUR && CUR.id);
     applySpec(P.mesh, P.spec);
     S.add(P.mesh);
     P.mesh.traverse(o => { if (o.isMesh)
