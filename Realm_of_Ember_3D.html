@@ -4,8 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Realm of Ember 3D</title>
-<link rel="stylesheet" href="style.css">
-</head>
+<link rel="stylesheet" href="style.css"></head>
 <body>
 <div id="pf" class="p">
 </div>
@@ -58,6 +57,10 @@
 <div id="bossf" class="p" style="left:50%;transform:translateX(-50%);top:66px;width:380px;display:none;text-align:center;z-index:4"></div>
 <div id="dgp" class="p" style="right:10px;top:244px;display:none;z-index:3;font-size:13px;max-width:200px"></div>
 <div id="dgw" class="p"></div>
+<div id="shop" class="p"></div>
+<div id="cons" class="p"></div>
+<div id="bless" class="p" style="left:10px;top:158px;display:none;color:#ffe9a0;font-weight:bold;z-index:3;padding:2px 10px">☀ Blessed by the light</div>
+<div id="racep" class="p" style="left:50%;transform:translateX(-50%);top:66px;display:none;text-align:center;z-index:4;font-size:14px;min-width:230px"></div>
 <div id="vig" style="position:fixed;inset:0;pointer-events:none;box-shadow:inset 0 0 130px 25px rgba(220,30,30,.55);opacity:0;transition:opacity .4s;z-index:2"></div>
 <div id="cb" class="p" style="left:50%;transform:translateX(-50%);bottom:100px;width:220px;display:none;text-align:center">Summoning mount…<div class="bar">
 <i id="cbi" style="background:#e8b84a;width:0">
@@ -74,11 +77,11 @@
 <button onclick="toggleDg()" title="Dungeons (J)"><i>🏰</i><span>Dungeons</span></button>
 </div>
 <button id="admbtn" onclick="toggleAdm()" title="Admin panel (R)">R</button>
-<div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump · H: mount · P: mounts · O: PvP · K: pets · T: toys · F: nearby hero · M: map · Esc: menu</div>
+<div id="help">WASD move · Right-drag: camera · Wheel: zoom<br>Click: target · Tab: next target · 1-4: abilities<br>Space: jump (fly up) · X: fly down · H: mount · P: mounts · O: PvP · K: pets · T: toys · F: nearby hero · M: map · Esc: menu</div>
 <div id="cs">
 <div id="cst"><h1>Realm of Ember</h1><div id="csn"></div></div>
 <div id="csl"></div>
-<div id="csb"><button id="cs_enter" onclick="csEnter()">▶ Enter World</button><button id="cs_new" onclick="csNew()">＋ Create a new character</button><button id="cs_del" onclick="csDelToggle()">🗑 Delete heroes</button><button id="cs_cancel" onclick="csCancelDel()" style="display:none">✖ Cancel</button></div>
+<div id="csb"><button id="cs_enter" onclick="csEnter()">▶ Enter World</button><button id="cs_new" onclick="csNew()">＋ Create a new character</button><button id="cs_del" onclick="csDelToggle()">🗑 Delete hero</button><button id="cs_cancel" onclick="csCancelDel()" style="display:none">✖ Cancel</button></div>
 </div>
 <div id="dlg"></div>
 <div id="spec" style="position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:20px;z-index:10;background:#0b0804f4"></div>
@@ -122,6 +125,5 @@
 <button id="cbk" onclick="showSelect()" style="margin-top:8px">← Back to your heroes</button>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="game.js"></script>
-</body>
+<script src="game.js"></script></body>
 </html>
